@@ -1,0 +1,47 @@
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+export interface JournalMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  timestamp: number;
+  modelUsed?: string;
+}
+
+export interface ReflectionSummary {
+  title: string;
+  overview: string;
+  keyTakeaways: string[];
+  emotionalTone: string;
+  growthInsights: string;
+  actionItems: string[];
+  generatedAt?: number;
+}
+
+export interface JournalEntry {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  mood?: string;
+  topic?: string;
+  messages: JournalMessage[];
+  summary?: ReflectionSummary;
+  isFavorite?: boolean;
+  tags?: string[];
+}
+
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+export interface PromptStarter {
+  title: string;
+  topic: string;
+  prompt: string;
+  iconName: string;
+}
