@@ -29,6 +29,16 @@ const MAX_GUEST_ENTRIES = 2;
 const MAX_GUEST_CONVERSATIONS_PER_ENTRY = 2;
 
 export default function App() {
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const saved = localStorage.getItem("gemini_journal_theme");
+      if (saved === "dark" || saved === "light") return saved;
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch (_) {
+      return "light";
+    }
+  });
+
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -74,7 +84,23 @@ export default function App() {
     };
   }, []);
 
-  // 1. Listen to Firebase Authentication state & restore guest session if present
+  // 1. Theme synchronization with document & local storage
+  useEffect(() => {
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    try {
+      localStorage.setItem("gemini_journal_theme", theme);
+    } catch (_) {}
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }, []);
+
+  // 2. Listen to Firebase Authentication state & restore guest session if present
   useEffect(() => {
     const unsubscribe = subscribeToAuth((fbUser) => {
       if (fbUser) {
@@ -473,11 +499,11 @@ export default function App() {
   // Loading spinner during initial auth check
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-slate-900 text-indigo-400 flex items-center justify-center shadow-md">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center gap-3 transition-colors duration-200">
+        <div className="w-10 h-10 rounded-xl bg-slate-900 dark:bg-slate-800 text-indigo-400 flex items-center justify-center shadow-md">
           <Loader2 className="w-5 h-5 animate-spin" />
         </div>
-        <p className="text-sm font-medium text-slate-600">Initializing Gemini Reflection Journal...</p>
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Initializing Gemini Reflection Journal...</p>
       </div>
     );
   }
@@ -486,10 +512,12 @@ export default function App() {
   const activeGuestEntryIndex = currentGuestIndex >= 0 ? currentGuestIndex + 1 : Math.min(entries.length + 1, MAX_GUEST_ENTRIES);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-200">
       {/* Top Navigation */}
       <Navbar
         user={user}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         isGuest={isGuest}
         guestEntryCount={entries.length}
         maxGuestEntries={MAX_GUEST_ENTRIES}
@@ -540,10 +568,10 @@ export default function App() {
           />
         ) : (
           <div className="text-center py-24 space-y-4">
-            <p className="text-slate-600 text-sm">No reflection session open.</p>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">No reflection session open.</p>
             <button
               onClick={handleNewEntry}
-              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             >
               Start New Reflection
             </button>

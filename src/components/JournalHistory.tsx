@@ -221,19 +221,19 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
   return (
     <div
       id="journal-history-drawer"
-      className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] bg-white border-l border-slate-200/90 shadow-2xl flex flex-col justify-between"
+      className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] bg-white dark:bg-slate-900 border-l border-slate-200/90 dark:border-slate-800 shadow-2xl flex flex-col justify-between transition-colors"
     >
       {/* Header & Filter Controls */}
-      <div className="p-5 border-b border-slate-100 space-y-3.5 bg-white">
+      <div className="p-5 border-b border-slate-100 dark:border-slate-800 space-y-3.5 bg-white dark:bg-slate-900 transition-colors">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+            <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
               <History className="w-4 h-4" />
             </div>
-            <h2 className="font-extrabold text-slate-900 text-lg">
+            <h2 className="font-extrabold text-slate-900 dark:text-slate-50 text-lg">
               {isGuest ? "Guest Reflections" : "Reflection History"}
             </h2>
-            <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-semibold border border-slate-200">
+            <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full font-semibold border border-slate-200 dark:border-slate-700">
               {filteredEntries.length === entries.length 
                 ? `${entries.length}${isGuest ? `/${maxGuestEntries}` : ""} ${entries.length === 1 ? "entry" : "entries"}`
                 : `${filteredEntries.length} of ${entries.length}`
@@ -243,7 +243,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
           <button
             id="btn-close-history-drawer"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -251,9 +251,9 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
         {/* Guest info banner */}
         {isGuest && (
-          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-slate-700 flex items-center justify-between gap-2">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200/80 dark:border-amber-800 text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <Lock className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
               <span>Guest session: Max {maxGuestEntries} reflection entries allowed.</span>
             </div>
             <button
@@ -261,7 +261,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                 "Sign In for Unlimited History",
                 "Sign in with Google or Email to unlock unlimited history, search filtering, markdown export, and cloud backups."
               )}
-              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline shrink-0 cursor-pointer"
+              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0 cursor-pointer"
             >
               Sign In
             </button>
@@ -270,19 +270,19 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
         {/* Search input */}
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             id="input-search-history"
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search entries, keywords, thoughts..."
-            className="w-full pl-10 pr-12 py-2 bg-slate-50 border border-slate-200/90 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="w-full pl-10 pr-12 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-semibold"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xs font-semibold cursor-pointer"
             >
               Clear
             </button>
@@ -292,17 +292,17 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
         {/* Filter Controls Row 1: Focus and Mood */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           {/* Focus Area Filter */}
-          <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
-            <Tag className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+          <div className="relative flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 transition-colors">
+            <Tag className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 mr-1.5 shrink-0" />
             <select
               id="select-history-focus-filter"
               value={filterFocus}
               onChange={(e) => setFilterFocus(e.target.value)}
-              className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold text-xs cursor-pointer truncate"
+              className="w-full bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 font-semibold text-xs cursor-pointer truncate"
             >
-              <option value="all">All Focus Areas</option>
+              <option value="all" className="dark:bg-slate-800">All Focus Areas</option>
               {availableFocusAreas.map((f) => (
-                <option key={f} value={f}>
+                <option key={f} value={f} className="dark:bg-slate-800">
                   {f}
                 </option>
               ))}
@@ -310,17 +310,17 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
           </div>
 
           {/* Mood Filter */}
-          <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
-            <Smile className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+          <div className="relative flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 transition-colors">
+            <Smile className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 mr-1.5 shrink-0" />
             <select
               id="select-history-mood-filter"
               value={filterMood}
               onChange={(e) => setFilterMood(e.target.value)}
-              className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold text-xs cursor-pointer truncate"
+              className="w-full bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 font-semibold text-xs cursor-pointer truncate"
             >
-              <option value="all">All Moods</option>
+              <option value="all" className="dark:bg-slate-800">All Moods</option>
               {availableMoods.map((m) => (
-                <option key={m} value={m}>
+                <option key={m} value={m} className="dark:bg-slate-800">
                   {m}
                 </option>
               ))}
@@ -331,20 +331,20 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
         {/* Filter Controls Row 2: Date and Favorites */}
         <div className="flex items-center justify-between gap-2 text-xs">
           {/* Date Filter Preset */}
-          <div className="flex-1 relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
-            <Calendar className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+          <div className="flex-1 relative flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 transition-colors">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 mr-1.5 shrink-0" />
             <select
               id="select-history-date-filter"
               value={filterDatePreset}
               onChange={(e) => setFilterDatePreset(e.target.value)}
-              className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold text-xs cursor-pointer truncate"
+              className="w-full bg-transparent border-none outline-none text-slate-700 dark:text-slate-200 font-semibold text-xs cursor-pointer truncate"
             >
-              <option value="all">All Dates</option>
-              <option value="today">Today</option>
-              <option value="7days">Past 7 Days</option>
-              <option value="30days">Past 30 Days</option>
-              <option value="thisMonth">This Month</option>
-              <option value="custom">Custom Date Range...</option>
+              <option value="all" className="dark:bg-slate-800">All Dates</option>
+              <option value="today" className="dark:bg-slate-800">Today</option>
+              <option value="7days" className="dark:bg-slate-800">Past 7 Days</option>
+              <option value="30days" className="dark:bg-slate-800">Past 30 Days</option>
+              <option value="thisMonth" className="dark:bg-slate-800">This Month</option>
+              <option value="custom" className="dark:bg-slate-800">Custom Date Range...</option>
             </select>
           </div>
 
@@ -363,19 +363,19 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             }}
             className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               onlyFavorites
-                ? "bg-amber-50 text-amber-900 border-amber-300 shadow-2xs"
-                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                ? "bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-2xs"
+                : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
             }`}
           >
-            <Star className={`w-3.5 h-3.5 ${onlyFavorites ? "fill-amber-400 text-amber-500" : "text-slate-400"}`} />
+            <Star className={`w-3.5 h-3.5 ${onlyFavorites ? "fill-amber-400 text-amber-500" : "text-slate-400 dark:text-slate-500"}`} />
             <span>Favorites</span>
           </button>
         </div>
 
         {/* Custom Date Range Picker Inputs */}
         {filterDatePreset === "custom" && (
-          <div className="p-2.5 bg-slate-50/90 border border-slate-200 rounded-xl space-y-2 text-xs animate-fadeIn">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+          <div className="p-2.5 bg-slate-50/90 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2 text-xs animate-fadeIn">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300">
               <span>Filter by Date Range:</span>
               {(customStartDate || customEndDate) && (
                 <button
@@ -384,7 +384,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                     setCustomStartDate("");
                     setCustomEndDate("");
                   }}
-                  className="text-indigo-600 hover:text-indigo-700 underline font-medium cursor-pointer"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium cursor-pointer"
                 >
                   Clear dates
                 </button>
@@ -392,7 +392,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label htmlFor="input-filter-start-date" className="block text-[10px] text-slate-500 mb-0.5 font-medium">
+                <label htmlFor="input-filter-start-date" className="block text-[10px] text-slate-500 dark:text-slate-400 mb-0.5 font-medium">
                   From:
                 </label>
                 <input
@@ -400,11 +400,11 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-indigo-500"
+                  className="w-full px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label htmlFor="input-filter-end-date" className="block text-[10px] text-slate-500 mb-0.5 font-medium">
+                <label htmlFor="input-filter-end-date" className="block text-[10px] text-slate-500 dark:text-slate-400 mb-0.5 font-medium">
                   To:
                 </label>
                 <input
@@ -412,7 +412,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-indigo-500"
+                  className="w-full px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -421,12 +421,12 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
         {/* Reset active filters button */}
         {hasActiveFilters && (
-          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
-            <span className="text-slate-500">Filters active ({filteredEntries.length} results)</span>
+          <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+            <span className="text-slate-500 dark:text-slate-400">Filters active ({filteredEntries.length} results)</span>
             <button
               id="btn-reset-history-filters"
               onClick={handleResetFilters}
-              className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+              className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 font-semibold cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>Reset filters</span>
@@ -438,16 +438,16 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
       {/* List Container */}
       <div id="history-entries-list" className="flex-1 overflow-y-auto p-4 space-y-3">
         {filteredEntries.length === 0 ? (
-          <div className="text-center py-16 space-y-2 text-slate-400">
+          <div className="text-center py-16 space-y-2 text-slate-400 dark:text-slate-500">
             <History className="w-8 h-8 mx-auto stroke-1" />
-            <p className="text-sm font-semibold text-slate-700">No reflections found</p>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No reflections found</p>
             <p className="text-xs">
               {hasActiveFilters ? "Try adjusting your filters or search terms" : "Start your first reflection in the editor"}
             </p>
             {hasActiveFilters && (
               <button
                 onClick={handleResetFilters}
-                className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                className="mt-3 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 Clear all filters
               </button>
@@ -471,8 +471,8 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                 }}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2.5 relative group ${
                   isActive
-                    ? "bg-slate-900 text-white border-slate-900 shadow-md ring-1 ring-slate-900"
-                    : "bg-white hover:bg-slate-50/80 border-slate-200/80 text-slate-900 shadow-xs"
+                    ? "bg-slate-900 dark:bg-indigo-950 text-white border-slate-900 dark:border-indigo-800 shadow-md ring-1 ring-slate-900 dark:ring-indigo-800"
+                    : "bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 border-slate-200/80 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-xs"
                 }`}
               >
                 {/* Top metadata */}
@@ -485,7 +485,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       id={`btn-fav-entry-${entry.id}`}
                       onClick={(e) => handleFavoriteClick(entry, e)}
                       title={entry.isFavorite ? "Remove favorite" : "Mark as favorite"}
-                      className="p-1 text-slate-400 hover:text-amber-500 transition-colors"
+                      className="p-1 text-slate-400 hover:text-amber-500 transition-colors cursor-pointer"
                     >
                       <Star
                         className={`w-3.5 h-3.5 ${
@@ -493,7 +493,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                             ? "fill-amber-400 text-amber-500"
                             : isActive
                             ? "text-slate-500"
-                            : "text-slate-300"
+                            : "text-slate-300 dark:text-slate-600"
                         }`}
                       />
                     </button>
@@ -501,8 +501,8 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       id={`btn-export-entry-${entry.id}`}
                       onClick={(e) => handleExportMarkdown(entry, e)}
                       title="Export as Markdown"
-                      className={`p-1 transition-colors ${
-                        isActive ? "text-slate-400 hover:text-white" : "text-slate-400 hover:text-slate-700"
+                      className={`p-1 transition-colors cursor-pointer ${
+                        isActive ? "text-slate-400 hover:text-white" : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                       }`}
                     >
                       <FileDown className="w-3.5 h-3.5" />
@@ -511,8 +511,8 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       id={`btn-delete-entry-${entry.id}`}
                       onClick={(e) => confirmDelete(entry.id, e)}
                       title="Delete reflection"
-                      className={`p-1 transition-colors ${
-                        isActive ? "text-slate-400 hover:text-rose-400" : "text-slate-400 hover:text-rose-600"
+                      className={`p-1 transition-colors cursor-pointer ${
+                        isActive ? "text-slate-400 hover:text-rose-400" : "text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                       }`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -523,7 +523,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                 {/* Content Snippet */}
                 <p
                   className={`text-xs line-clamp-2 leading-relaxed ${
-                    isActive ? "text-slate-300" : "text-slate-600"
+                    isActive ? "text-slate-300" : "text-slate-600 dark:text-slate-400"
                   }`}
                 >
                   {snippet}
@@ -537,11 +537,11 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold ${
                           isActive
-                            ? "bg-slate-800 text-indigo-200 border border-slate-700"
-                            : "bg-indigo-50 text-indigo-700 border border-indigo-200/70"
+                            ? "bg-slate-800 dark:bg-indigo-900 text-indigo-200 border border-slate-700 dark:border-indigo-700"
+                            : "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/60"
                         }`}
                       >
-                        <Tag className="w-3 h-3 text-indigo-500" />
+                        <Tag className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
                         {entry.topic}
                       </span>
                     )}
@@ -551,8 +551,8 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       <span
                         className={`px-2 py-0.5 rounded-lg font-semibold ${
                           isActive
-                            ? "bg-slate-800 text-slate-300 border border-slate-700"
-                            : "bg-slate-100 text-slate-700 border border-slate-200"
+                            ? "bg-slate-800 dark:bg-slate-800 text-slate-300 border border-slate-700"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                         }`}
                       >
                         {entry.mood}
@@ -563,10 +563,12 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                     {entry.summary && (
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold ${
-                          isActive ? "bg-indigo-950/60 text-indigo-300 border border-indigo-800/40" : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                          isActive
+                            ? "bg-indigo-950/60 text-indigo-300 border border-indigo-800/40"
+                            : "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60"
                         }`}
                       >
-                        <Sparkles className="w-3 h-3 text-emerald-500" />
+                        <Sparkles className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
                         Synthesized
                       </span>
                     )}
@@ -574,7 +576,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
                   <div
                     className={`flex items-center gap-2 font-medium ml-auto ${
-                      isActive ? "text-slate-400" : "text-slate-500"
+                      isActive ? "text-slate-400" : "text-slate-500 dark:text-slate-400"
                     }`}
                   >
                     <span className="flex items-center gap-1">
@@ -582,7 +584,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       {entry.messages.length}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-slate-400" />
+                      <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                       {new Date(entry.createdAt).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",
@@ -598,7 +600,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/80 text-xs text-slate-500 text-center font-medium">
+      <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 text-xs text-slate-500 dark:text-slate-400 text-center font-medium">
         {isGuest ? "Guest data stored locally • Sign in for cloud backup" : "Data is isolated to your UID in Cloud Firestore"}
       </div>
     </div>

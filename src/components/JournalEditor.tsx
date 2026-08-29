@@ -212,26 +212,26 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       {isGuest && (
         <div
           id="guest-conversation-banner"
-          className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          className="p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800/60 text-slate-800 dark:text-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
           <div className="flex items-start gap-2.5">
-            <div className="p-1.5 rounded-xl bg-amber-100 border border-amber-200 text-amber-800 shrink-0 mt-0.5">
+            <div className="p-1.5 rounded-xl bg-amber-100 dark:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 shrink-0 mt-0.5">
               <MessageSquare className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-slate-900">
+                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                   Guest Mode (Entry {guestEntryIndex} of {maxGuestEntries})
                 </span>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                   isEntryConversationLimitReached
-                    ? "bg-rose-100 text-rose-800 border-rose-200"
-                    : "bg-amber-200/80 text-amber-900 border-amber-300"
+                    ? "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                    : "bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700"
                 }`}>
                   Conversations: {userConversationCount}/{maxGuestConversationsPerEntry} in this entry
                 </span>
               </div>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                 {isEntryConversationLimitReached
                   ? `You have reached the maximum of ${maxGuestConversationsPerEntry} conversations for this reflection. Sign in with an account to continue conversing without limits${totalGuestEntries < maxGuestEntries ? " or start your 2nd entry." : "."}`
                   : `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per entry and ${maxGuestEntries} total entries. Advanced features (Summaries, Voice, Cloud backup) require an account.`}
@@ -245,7 +245,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 type="button"
                 id="btn-guest-banner-new-entry"
                 onClick={onNewEntry}
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-xs border border-slate-300 transition-colors cursor-pointer shadow-2xs"
+                className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs"
               >
                 Start Entry 2
               </button>
@@ -257,7 +257,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 "Sign In to Unlock All Features",
                 "Create a free account to unlock unlimited conversations, unlimited entries, AI growth summaries, voice dictation, and persistent cloud sync."
               )}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-xs"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-xs"
             >
               Sign In with Account
             </button>
@@ -266,19 +266,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       )}
 
       {/* Top Header & Metadata Controls */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
         {/* Title & Date */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
           <input
             id="input-entry-title"
             type="text"
             value={entry.title}
             onChange={(e) => onUpdateEntry({ ...entry, title: e.target.value })}
             placeholder="Give this reflection a title..."
-            className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 border-none outline-none focus:ring-0 w-full placeholder:text-slate-300"
+            className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 border-none outline-none focus:ring-0 w-full placeholder:text-slate-300 dark:placeholder:text-slate-600 bg-transparent"
           />
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium whitespace-nowrap">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <span>{new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
           </div>
         </div>
@@ -287,18 +287,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2">
             {/* Mood picker */}
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <Smile className="w-3.5 h-3.5 text-slate-500" />
-              <span className="text-slate-500 font-medium">Mood:</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Smile className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Mood:</span>
               <select
                 id="select-entry-mood"
                 value={entry.mood || ""}
                 onChange={(e) => onUpdateEntry({ ...entry, mood: e.target.value })}
-                className="bg-transparent border-none outline-none text-slate-800 font-semibold cursor-pointer"
+                className="bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
               >
-                <option value="">Select mood...</option>
+                <option value="" className="dark:bg-slate-800">Select mood...</option>
                 {MOODS.map((m) => (
-                  <option key={m.value} value={m.value}>
+                  <option key={m.value} value={m.value} className="dark:bg-slate-800">
                     {m.label}
                   </option>
                 ))}
@@ -306,18 +306,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             </div>
 
             {/* Topic picker */}
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <Tag className="w-3.5 h-3.5 text-slate-500" />
-              <span className="text-slate-500 font-medium">Focus:</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Tag className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Focus:</span>
               <select
                 id="select-entry-topic"
                 value={entry.topic || ""}
                 onChange={(e) => onUpdateEntry({ ...entry, topic: e.target.value })}
-                className="bg-transparent border-none outline-none text-slate-800 font-semibold cursor-pointer"
+                className="bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
               >
-                <option value="">Select focus area...</option>
+                <option value="" className="dark:bg-slate-800">Select focus area...</option>
                 {TOPICS.map((t) => (
-                  <option key={t} value={t}>
+                  <option key={t} value={t} className="dark:bg-slate-800">
                     {t}
                   </option>
                 ))}
@@ -333,18 +333,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               disabled={isGeneratingSummary}
               className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 border transition-all disabled:opacity-50 cursor-pointer shadow-xs ${
                 isGuest
-                  ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
-                  : "bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border-indigo-200/80"
+                  ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700"
+                  : "bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800"
               }`}
             >
               {isGeneratingSummary ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
                   <span>Synthesizing Reflection...</span>
                 </>
               ) : isGuest ? (
                 <>
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
+                  <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Generate Growth Summary (Account Req.)</span>
                 </>
               ) : (
@@ -386,8 +386,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               <div
                 className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-semibold shadow-xs ${
                   isUser
-                    ? "bg-slate-900 text-white"
-                    : "bg-indigo-100 text-indigo-900 border border-indigo-200"
+                    ? "bg-slate-900 dark:bg-indigo-600 text-white"
+                    : "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
                 }`}
               >
                 {isUser ? (
@@ -402,7 +402,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     <User className="w-4 h-4" />
                   )
                 ) : (
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 )}
               </div>
 
@@ -410,18 +410,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               <div
                 className={`max-w-[85%] sm:max-w-[78%] rounded-2xl p-5 space-y-2 relative group shadow-xs ${
                   isUser
-                    ? "bg-slate-900 text-slate-50 rounded-tr-xs"
-                    : "bg-white text-slate-900 border border-slate-200/90 rounded-tl-xs"
+                    ? "bg-slate-900 dark:bg-indigo-950 text-slate-50 border border-transparent dark:border-indigo-800/60 rounded-tr-xs"
+                    : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200/90 dark:border-slate-800 rounded-tl-xs"
                 }`}
               >
                 {/* Header info */}
-                <div className="flex items-center justify-between gap-4 text-[11px] text-slate-400">
-                  <span className="font-semibold text-slate-400">
+                <div className="flex items-center justify-between gap-4 text-[11px] text-slate-400 dark:text-slate-500">
+                  <span className="font-semibold text-slate-400 dark:text-slate-400">
                     {isUser ? "You" : "Gemini 3.6 Flash"}
                   </span>
                   <div className="flex items-center gap-2">
                     {msg.modelUsed && (
-                      <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
+                      <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded border border-slate-200 dark:border-slate-700">
                         {msg.modelUsed}
                       </span>
                     )}
@@ -432,7 +432,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                       id={`btn-copy-msg-${index}`}
                       onClick={() => handleCopyMessage(msg.id, msg.content)}
                       title="Copy message"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-white cursor-pointer"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-white dark:hover:text-slate-200 cursor-pointer"
                     >
                       {copiedId === msg.id ? (
                         <Check className="w-3 h-3 text-emerald-400" />
@@ -448,7 +448,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   className={`text-sm leading-relaxed ${
                     isUser
                       ? "text-slate-100 whitespace-pre-wrap"
-                      : "text-slate-800 prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:font-bold prose-headings:text-slate-900"
+                      : "text-slate-800 dark:text-slate-200 prose prose-slate dark:prose-invert max-w-none prose-p:leading-relaxed prose-headings:font-bold prose-headings:text-slate-900 dark:prose-headings:text-slate-100"
                   }`}
                 >
                   {isUser ? (
@@ -469,15 +469,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         {/* Gemini Generating Indicator */}
         {isGeneratingReply && (
           <div className="flex items-start gap-3.5">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-900 border border-indigo-200 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-pulse" />
             </div>
-            <div className="bg-white border border-slate-200/90 rounded-2xl rounded-tl-xs p-5 space-y-2 shadow-xs max-w-md">
-              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl rounded-tl-xs p-5 space-y-2 shadow-xs max-w-md">
+              <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
                 <span>Gemini is reflecting on your entry...</span>
               </div>
-              <div className="h-2 w-48 bg-slate-100 rounded-full animate-pulse"></div>
+              <div className="h-2 w-48 bg-slate-100 dark:bg-slate-800 rounded-full animate-pulse"></div>
             </div>
           </div>
         )}
@@ -490,10 +490,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       {errorMessage && (
         <div
           id="editor-error-banner"
-          className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center justify-between gap-3 shadow-xs"
+          className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-sm flex items-center justify-between gap-3 shadow-xs"
         >
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>{errorMessage}</span>
           </div>
           {saveStatus === "error" && (
@@ -540,20 +540,20 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       <form
         id="journal-input-form"
         onSubmit={handleSend}
-        className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200/90 shadow-md ring-1 ring-slate-900/5 space-y-3 sticky bottom-4 z-30"
+        className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-md ring-1 ring-slate-900/5 dark:ring-slate-800/50 space-y-3 sticky bottom-4 z-30 transition-colors"
       >
         {isEntryConversationLimitReached ? (
-          <div className="bg-amber-50/95 border border-amber-200/90 rounded-xl p-3.5 text-left space-y-2">
+          <div className="bg-amber-50/95 dark:bg-amber-950/50 border border-amber-200/90 dark:border-amber-800/60 rounded-xl p-3.5 text-left space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                <Lock className="w-4 h-4 text-amber-700" />
+              <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-xs">
+                <Lock className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                 <span>Conversation Limit Reached for this Entry ({maxGuestConversationsPerEntry}/{maxGuestConversationsPerEntry})</span>
               </div>
-              <span className="text-[10px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+              <span className="text-[10px] font-semibold bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
                 Max 2 Per Entry
               </span>
             </div>
-            <p className="text-xs text-amber-800">
+            <p className="text-xs text-amber-800 dark:text-amber-300">
               You have used both allowed conversations in this reflection entry. Sign in with an account to continue reflecting without limits{totalGuestEntries < maxGuestEntries ? " or create your 2nd allowed guest entry." : "."}
             </p>
             <div className="flex items-center gap-2 pt-1">
@@ -562,7 +562,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   type="button"
                   id="btn-guest-form-new-entry"
                   onClick={onNewEntry}
-                  className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-xs border border-slate-300 transition-all cursor-pointer shadow-2xs"
+                  className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
                 >
                   Start Entry 2
                 </button>
@@ -574,7 +574,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   "Unlock Unlimited Conversations",
                   "Sign in with Google or Email to continue this conversation and reflect without limits."
                 )}
-                className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-all cursor-pointer shadow-xs"
+                className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold text-xs transition-all cursor-pointer shadow-xs"
               >
                 Sign In with Account
               </button>
@@ -597,19 +597,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     ? `Continue reflection with Gemini (Conversation ${userConversationCount + 1} of ${maxGuestConversationsPerEntry})...`
                     : "Continue your conversation with Gemini..."
                 }
-                className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 placeholder:text-slate-400 focus:ring-0 leading-relaxed max-h-48"
+                className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 leading-relaxed max-h-48"
               />
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
-              <div className="text-slate-400 hidden sm:block font-medium">
+            <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs">
+              <div className="text-slate-400 dark:text-slate-500 hidden sm:block font-medium">
                 {isGuest ? (
-                  <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                  <span className="text-amber-800 dark:text-amber-300 font-semibold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200/80 dark:border-amber-800">
                     Guest Conversation {userConversationCount + 1} of {maxGuestConversationsPerEntry}
                   </span>
                 ) : (
                   <>
-                    Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> to send reflection
+                    Press <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 font-mono text-[10px] text-slate-600 dark:text-slate-300">Cmd + Enter</kbd> to send reflection
                   </>
                 )}
               </div>
@@ -623,16 +623,16 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   title={isGuest ? "Sign in to enable voice" : voice.isListening ? "Stop listening" : "Start hands-free voice input"}
                   className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
                     isGuest
-                      ? "bg-slate-100 hover:bg-slate-200/80 text-slate-500 border-slate-200"
+                      ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                       : voice.isListening || voice.isRecordingAudio
                       ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse"
-                      : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                   }`}
                 >
                   {isGuest ? (
                     <>
-                      <Mic className="w-3.5 h-3.5 text-slate-400" />
-                      <Lock className="w-3 h-3 text-amber-600" />
+                      <Mic className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                      <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                     </>
                   ) : voice.isListening || voice.isRecordingAudio ? (
                     <>
@@ -641,7 +641,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     </>
                   ) : (
                     <>
-                      <Mic className="w-3.5 h-3.5 text-slate-600" />
+                      <Mic className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                       <span className="text-xs font-semibold hidden md:inline">Voice</span>
                     </>
                   )}
@@ -653,7 +653,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     id="btn-composer-clear"
                     type="button"
                     onClick={() => setInputText("")}
-                    className="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+                    className="px-3 py-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-medium transition-colors cursor-pointer"
                   >
                     Clear
                   </button>
@@ -663,7 +663,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   id="btn-send-reflection-prompt"
                   type="submit"
                   disabled={!inputText.trim() || isGeneratingReply}
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-2 shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-2 shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isGeneratingReply ? (
                     <>

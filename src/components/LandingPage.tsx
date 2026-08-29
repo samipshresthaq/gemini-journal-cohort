@@ -34,31 +34,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     <div id="landing-page-container" className="min-h-[calc(100vh-4rem)] flex flex-col justify-between py-12 px-4 sm:px-6 lg:px-8">
       {/* Hero Section */}
       <div className="max-w-4xl mx-auto text-center space-y-8 pt-6">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-semibold tracking-wide shadow-xs">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-semibold tracking-wide shadow-xs">
+          <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <span>AI-Powered Mindful Journaling</span>
         </div>
 
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 max-w-3xl mx-auto leading-tight">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 max-w-3xl mx-auto leading-tight">
           Reflect deeper, think clearer, and capture your growth.
         </h1>
 
-        <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto font-normal leading-relaxed">
+        <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
           Your personal space for mindful self-reflection. Write freely, engage in guided thought-provoking dialogue, and transform daily reflections into lasting clarity.
         </p>
 
         {/* Authentication Options Section */}
         <div className="pt-2 max-w-md mx-auto w-full space-y-4">
           {/* Main Action Card */}
-          <div id="auth-main-container" className="bg-white rounded-2xl border border-slate-200/90 shadow-lg p-6 space-y-4 text-left">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+          <div id="auth-main-container" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-lg p-6 space-y-4 text-left">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h2 className="text-sm font-bold text-slate-900">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   Welcome to Gemini Journal
                 </h2>
-                <p className="text-xs text-slate-500">Sign in to sync your reflections to Cloud Firestore</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Sign in to sync your reflections to Cloud Firestore</p>
               </div>
-              <span className="text-[11px] text-indigo-600 bg-indigo-50 font-semibold px-2 py-0.5 rounded-full border border-indigo-100">
+              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 font-semibold px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/80">
                 Cloud Synced
               </span>
             </div>
@@ -68,7 +68,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               id="btn-google-sign-in"
               onClick={onSignIn}
               disabled={isLoading}
-              className="w-full h-12 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-70 cursor-pointer"
+              className="w-full h-12 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-70 cursor-pointer"
             >
               {isLoading ? (
                 <>
@@ -96,7 +96,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     />
                   </svg>
                   <span>Continue with Google</span>
-                  <ArrowRight className="w-4 h-4 text-slate-400 ml-auto" />
+                  <ArrowRight className="w-4 h-4 text-slate-400 dark:text-slate-300 ml-auto" />
                 </>
               )}
             </button>
@@ -108,9 +108,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 "Sign In with Email & Password",
                 "Log into your account or register to save reflections, unlock AI growth summaries, and manage history."
               )}
-              className="w-full h-11 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+              className="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
             >
-              <Mail className="w-3.5 h-3.5 text-slate-500" />
+              <Mail className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span>Sign In or Register with Email</span>
             </button>
 
@@ -118,7 +118,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {errorMessage && (
               <div
                 id="landing-auth-error-banner"
-                className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl text-center font-medium shadow-2xs space-y-0.5"
+                className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs rounded-xl text-center font-medium shadow-2xs space-y-0.5"
               >
                 <p>{errorMessage}</p>
               </div>
@@ -129,14 +129,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {onGuestSignIn && (
             <div
               id="guest-session-container"
-              className="bg-slate-50/90 rounded-2xl border border-slate-200/80 p-4 text-left shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+              className="bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 text-left shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
             >
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <h3 className="text-xs font-bold text-slate-800">No account required</h3>
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">No account required</h3>
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Try all features immediately in private local guest mode.
                 </p>
               </div>
@@ -146,7 +146,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 id="btn-guest-sign-in"
                 onClick={onGuestSignIn}
                 disabled={isLoading}
-                className="w-full sm:w-auto shrink-0 h-9 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 font-semibold text-xs border border-slate-300/80 shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto shrink-0 h-9 px-4 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white font-semibold text-xs border border-slate-300/80 dark:border-slate-700 shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <span>Continue as Guest</span>
                 <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
@@ -154,19 +154,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-4 text-xs text-slate-500 pt-2 font-medium">
+          <div className="flex items-center justify-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-2 font-medium">
             <span className="flex items-center gap-1.5">
-              <BrainCircuit className="w-3.5 h-3.5 text-indigo-600" />
+              <BrainCircuit className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               Interactive Dialogue
             </span>
-            <span className="text-slate-300">•</span>
+            <span className="text-slate-300 dark:text-slate-700">•</span>
             <span className="flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-sky-600" />
+              <Compass className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
               Action Summaries
             </span>
-            <span className="text-slate-300">•</span>
+            <span className="text-slate-300 dark:text-slate-700">•</span>
             <span className="flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-amber-600" />
+              <Tag className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               Smart Tagging
             </span>
           </div>
@@ -176,41 +176,41 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* Top 3 Core Features Grid */}
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 my-16 w-full">
         {/* Feature 1 */}
-        <div id="feature-card-dialogue" className="bg-white p-7 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow space-y-3.5">
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+        <div id="feature-card-dialogue" className="bg-white dark:bg-slate-900 p-7 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-shadow space-y-3.5">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
             <BrainCircuit className="w-5 h-5" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Guided Multi-Turn Reflection</h3>
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Guided Multi-Turn Reflection</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             Engage in back-and-forth reflective dialogue. The AI asks thoughtful follow-up questions to help you uncover deeper motivations, process emotions, and overcome mental blocks.
           </p>
         </div>
 
         {/* Feature 2 */}
-        <div id="feature-card-synthesis" className="bg-white p-7 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow space-y-3.5">
-          <div className="w-11 h-11 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center">
+        <div id="feature-card-synthesis" className="bg-white dark:bg-slate-900 p-7 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-shadow space-y-3.5">
+          <div className="w-11 h-11 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-100 dark:border-sky-900 text-sky-600 dark:text-sky-400 flex items-center justify-center">
             <Compass className="w-5 h-5" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Automated Growth Synthesis</h3>
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Automated Growth Synthesis</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             Instantly turn stream-of-consciousness journaling into organized takeaways, emotional highlights, and clear, realistic action steps for your day ahead.
           </p>
         </div>
 
         {/* Feature 3 */}
-        <div id="feature-card-tagging" className="bg-white p-7 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow space-y-3.5">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center">
+        <div id="feature-card-tagging" className="bg-white dark:bg-slate-900 p-7 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md transition-shadow space-y-3.5">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-100 dark:border-amber-900 text-amber-600 dark:text-amber-400 flex items-center justify-center">
             <Tag className="w-5 h-5" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Smart Tagging & Searchable Archive</h3>
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Smart Tagging & Searchable Archive</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
             Automatic thematic categorization tags your entries by topic and mood, making it effortless to filter, search, favorite, and revisit your personal growth journey over time.
           </p>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="max-w-4xl mx-auto text-center border-t border-slate-200 pt-6 text-xs text-slate-500 font-medium">
+      <div className="max-w-4xl mx-auto text-center border-t border-slate-200 dark:border-slate-800 pt-6 text-xs text-slate-500 dark:text-slate-400 font-medium">
         <p>Personal Reflective Journal & Thought Companion</p>
       </div>
     </div>
