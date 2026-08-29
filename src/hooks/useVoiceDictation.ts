@@ -38,6 +38,19 @@ export function useVoiceDictation({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const isListeningRef = useRef(false);
+  const optionsRef = useRef({
+    onTranscriptChange,
+    onVoiceCommandSend,
+    onVoiceCommandSummary,
+    onVoiceCommandClear,
+  });
+
+  optionsRef.current = {
+    onTranscriptChange,
+    onVoiceCommandSend,
+    onVoiceCommandSummary,
+    onVoiceCommandClear,
+  };
 
   isListeningRef.current = isListening;
 
@@ -104,6 +117,20 @@ export function useVoiceDictation({
     setAudioVolume(0);
   };
 
+  // Stop live dictation
+  const stopListening = useCallback(() => {
+    setIsListening(false);
+    isListeningRef.current = false;
+    setInterimTranscript("");
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {}
+      recognitionRef.current = null;
+    }
+    stopAudioAnalyzer();
+  }, []);
+
   // Process hands-free voice commands
   const processVoiceCommands = (transcript: string): boolean => {
     const clean = transcript.trim().toLowerCase();
@@ -118,8 +145,8 @@ export function useVoiceDictation({
       clean.endsWith("send message")
     ) {
       setLastCommand("Reflect / Send");
-      if (onVoiceCommandSend) {
-        onVoiceCommandSend();
+      if (optionsRef.current.onVoiceCommandSend) {
+        optionsRef.current.onVoiceCommandSend();
       }
       return true;
     }
@@ -132,8 +159,8 @@ export function useVoiceDictation({
       clean === "growth summary"
     ) {
       setLastCommand("Generate Summary");
-      if (onVoiceCommandSummary) {
-        onVoiceCommandSummary();
+      if (optionsRef.current.onVoiceCommandSummary) {
+        optionsRef.current.onVoiceCommandSummary();
       }
       return true;
     }
@@ -146,8 +173,8 @@ export function useVoiceDictation({
       clean === "start over"
     ) {
       setLastCommand("Clear Draft");
-      if (onVoiceCommandClear) {
-        onVoiceCommandClear();
+      if (optionsRef.current.onVoiceCommandClear) {
+        optionsRef.current.onVoiceCommandClear();
       }
       return true;
     }
@@ -236,7 +263,7 @@ export function useVoiceDictation({
           const isCommand = processVoiceCommands(finalChunk);
           if (!isCommand) {
             const formatted = formatPunctuation(finalChunk);
-            onTranscriptChange(formatted, true);
+            optionsRef.current.onTranscriptChange(formatted, true);
           }
         }
       };
@@ -276,21 +303,7 @@ export function useVoiceDictation({
       setIsListening(false);
       stopAudioAnalyzer();
     }
-  }, [onTranscriptChange]);
-
-  // Stop live dictation
-  const stopListening = useCallback(() => {
-    setIsListening(false);
-    isListeningRef.current = false;
-    setInterimTranscript("");
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (_) {}
-      recognitionRef.current = null;
-    }
-    stopAudioAnalyzer();
-  }, []);
+  }, [stopListening]);
 
   // Audio Recording with Gemini Multimodal Audio Transcription fallback
   const startAudioRecording = async () => {
@@ -341,7 +354,7 @@ export function useVoiceDictation({
             }
 
             if (data.transcript) {
-              onTranscriptChange(data.transcript, true);
+              optionsRef.current.onTranscriptChange(data.transcript, true);
               setLastCommand("Transcribed with Gemini 3.6 Flash");
             }
             setIsTranscribing(false);

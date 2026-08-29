@@ -83,13 +83,12 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
   };
 
   const handleModeSwitch = (mode: VoiceMode) => {
-    if (isGuest) {
-      if (onRequireAuth) {
-        onRequireAuth(
-          "Unlock Voice Modes",
-          "Audio recording and speech modes require an account. Sign in to unlock."
-        );
-      }
+    if (isGuest && onRequireAuth) {
+      onRequireAuth(
+        "Unlock Voice Modes",
+        "Audio recording and speech modes require an account. Sign in to unlock."
+      );
+
       return;
     }
     onSetVoiceMode(mode);

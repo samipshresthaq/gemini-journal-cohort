@@ -27,6 +27,7 @@ interface NavbarProps {
   onRetrySave?: () => void;
   onToggleWalkthrough: () => void;
   isWalkthroughOpen: boolean;
+  showTestGuide?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -116,10 +117,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 Guest ({guestEntryCount}/{maxGuestEntries} Entries)
               </span>
             )}
-            {import.meta.env.VITE_PROD}
-
             {/* Walkthrough Verification Toggle - Only shown in development mode */}
-            {!import.meta.env.VITE_PROD && (
+            {showTestGuide && (
               <button
                 id="btn-nav-walkthrough-guide"
                 onClick={onToggleWalkthrough}

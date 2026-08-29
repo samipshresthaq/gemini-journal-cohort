@@ -47,8 +47,10 @@ function getGuestEntries(userId: string): JournalEntry[] {
 function saveGuestEntries(userId: string, entries: JournalEntry[]) {
   try {
     localStorage.setItem(`${GUEST_STORAGE_PREFIX}${userId}`, JSON.stringify(entries));
-    // Trigger custom event for real-time reactivity in guest mode
-    window.dispatchEvent(new CustomEvent(`guest_entries_updated_${userId}`, { detail: entries }));
+    // Trigger custom event asynchronously for real-time reactivity in guest mode
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(`guest_entries_updated_${userId}`, { detail: entries }));
+    }, 0);
   } catch (err) {
     console.warn("Could not write guest entries to localStorage:", err);
   }
@@ -108,17 +110,23 @@ export function subscribeToUserEntries(
 
   // Handle Guest Mode with event-driven local subscriptions
   if (userId.startsWith("guest_")) {
-    onUpdate(getGuestEntries(userId));
+    const initialTimer = setTimeout(() => {
+      onUpdate(getGuestEntries(userId));
+    }, 0);
+
     const listener = (event: Event) => {
       const custom = event as CustomEvent<JournalEntry[]>;
-      if (custom.detail) {
-        onUpdate(custom.detail);
-      } else {
-        onUpdate(getGuestEntries(userId));
-      }
+      setTimeout(() => {
+        if (custom.detail) {
+          onUpdate(custom.detail);
+        } else {
+          onUpdate(getGuestEntries(userId));
+        }
+      }, 0);
     };
     window.addEventListener(`guest_entries_updated_${userId}`, listener);
     return () => {
+      clearTimeout(initialTimer);
       window.removeEventListener(`guest_entries_updated_${userId}`, listener);
     };
   }

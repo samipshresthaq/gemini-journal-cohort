@@ -9,7 +9,11 @@ import {
   Sparkles, 
   X, 
   FileDown, 
-  Lock
+  Lock,
+  Tag,
+  Calendar,
+  Smile,
+  RotateCcw
 } from "lucide-react";
 
 interface JournalHistoryProps {
@@ -24,6 +28,16 @@ interface JournalHistoryProps {
   onClose: () => void;
 }
 
+const DEFAULT_FOCUS_AREAS = [
+  "Daily Review",
+  "Career & Projects",
+  "Personal Growth",
+  "Mindful Calibrations",
+  "Creative Ideation",
+  "Relationships & Communication",
+  "Health & Habits",
+];
+
 export const JournalHistory: React.FC<JournalHistoryProps> = ({
   entries,
   activeEntryId,
@@ -37,6 +51,10 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMood, setFilterMood] = useState<string>("all");
+  const [filterFocus, setFilterFocus] = useState<string>("all");
+  const [filterDatePreset, setFilterDatePreset] = useState<string>("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -49,22 +67,86 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
     return Array.from(moods);
   }, [entries]);
 
+  // Available focus areas (union of default focus areas and entries' actual topics)
+  const availableFocusAreas = useMemo(() => {
+    const topics = new Set<string>(DEFAULT_FOCUS_AREAS);
+    entries.forEach((e) => {
+      if (e.topic) topics.add(e.topic);
+    });
+    return Array.from(topics);
+  }, [entries]);
+
+  const hasActiveFilters = Boolean(
+    searchQuery.trim() ||
+    filterMood !== "all" ||
+    filterFocus !== "all" ||
+    filterDatePreset !== "all" ||
+    customStartDate ||
+    customEndDate ||
+    onlyFavorites
+  );
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setFilterMood("all");
+    setFilterFocus("all");
+    setFilterDatePreset("all");
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setOnlyFavorites(false);
+  };
+
   // Filtered entries
   const filteredEntries = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOf7DaysAgo = startOfToday - 6 * 24 * 60 * 60 * 1000;
+    const startOf30DaysAgo = startOfToday - 29 * 24 * 60 * 60 * 1000;
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    const customStartTimestamp = customStartDate ? new Date(`${customStartDate}T00:00:00`).getTime() : null;
+    const customEndTimestamp = customEndDate ? new Date(`${customEndDate}T23:59:59.999`).getTime() : null;
+
     return entries.filter((entry) => {
       if (onlyFavorites && !entry.isFavorite) return false;
       if (filterMood !== "all" && entry.mood !== filterMood) return false;
+      if (filterFocus !== "all" && entry.topic !== filterFocus) return false;
+
+      // Date filtering
+      if (filterDatePreset === "today") {
+        if (entry.createdAt < startOfToday) return false;
+      } else if (filterDatePreset === "7days") {
+        if (entry.createdAt < startOf7DaysAgo) return false;
+      } else if (filterDatePreset === "30days") {
+        if (entry.createdAt < startOf30DaysAgo) return false;
+      } else if (filterDatePreset === "thisMonth") {
+        if (entry.createdAt < startOfThisMonth) return false;
+      } else if (filterDatePreset === "custom") {
+        if (customStartTimestamp && entry.createdAt < customStartTimestamp) return false;
+        if (customEndTimestamp && entry.createdAt > customEndTimestamp) return false;
+      }
 
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       const matchTitle = entry.title.toLowerCase().includes(q);
       const matchTopic = (entry.topic || "").toLowerCase().includes(q);
+      const matchMood = (entry.mood || "").toLowerCase().includes(q);
       const matchMessages = entry.messages.some((m) => m.content.toLowerCase().includes(q));
       const matchSummary = entry.summary?.overview.toLowerCase().includes(q);
+      const matchDateStr = new Date(entry.createdAt).toLocaleDateString().toLowerCase().includes(q);
 
-      return matchTitle || matchTopic || matchMessages || matchSummary;
+      return matchTitle || matchTopic || matchMood || matchMessages || matchSummary || matchDateStr;
     });
-  }, [entries, searchQuery, filterMood, onlyFavorites]);
+  }, [
+    entries, 
+    searchQuery, 
+    filterMood, 
+    filterFocus, 
+    filterDatePreset, 
+    customStartDate, 
+    customEndDate, 
+    onlyFavorites
+  ]);
 
   const handleExportMarkdown = (entry: JournalEntry, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -139,10 +221,10 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
   return (
     <div
       id="journal-history-drawer"
-      className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-white border-l border-slate-200/90 shadow-2xl flex flex-col justify-between"
+      className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] bg-white border-l border-slate-200/90 shadow-2xl flex flex-col justify-between"
     >
-      {/* Header */}
-      <div className="p-5 border-b border-slate-100 space-y-3.5">
+      {/* Header & Filter Controls */}
+      <div className="p-5 border-b border-slate-100 space-y-3.5 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
@@ -152,7 +234,10 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
               {isGuest ? "Guest Reflections" : "Reflection History"}
             </h2>
             <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-semibold border border-slate-200">
-              {entries.length}{isGuest ? `/${maxGuestEntries}` : ""} {entries.length === 1 ? "entry" : "entries"}
+              {filteredEntries.length === entries.length 
+                ? `${entries.length}${isGuest ? `/${maxGuestEntries}` : ""} ${entries.length === 1 ? "entry" : "entries"}`
+                : `${filteredEntries.length} of ${entries.length}`
+              }
             </span>
           </div>
           <button
@@ -204,14 +289,34 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
+        {/* Filter Controls Row 1: Focus and Mood */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {/* Focus Area Filter */}
+          <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
+            <Tag className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+            <select
+              id="select-history-focus-filter"
+              value={filterFocus}
+              onChange={(e) => setFilterFocus(e.target.value)}
+              className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold text-xs cursor-pointer truncate"
+            >
+              <option value="all">All Focus Areas</option>
+              {availableFocusAreas.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Mood Filter */}
+          <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
+            <Smile className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
             <select
               id="select-history-mood-filter"
               value={filterMood}
               onChange={(e) => setFilterMood(e.target.value)}
-              className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-semibold text-xs outline-none cursor-pointer"
+              className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold text-xs cursor-pointer truncate"
             >
               <option value="all">All Moods</option>
               {availableMoods.map((m) => (
@@ -221,7 +326,29 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
               ))}
             </select>
           </div>
+        </div>
 
+        {/* Filter Controls Row 2: Date and Favorites */}
+        <div className="flex items-center justify-between gap-2 text-xs">
+          {/* Date Filter Preset */}
+          <div className="flex-1 relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white transition-colors">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
+            <select
+              id="select-history-date-filter"
+              value={filterDatePreset}
+              onChange={(e) => setFilterDatePreset(e.target.value)}
+              className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold text-xs cursor-pointer truncate"
+            >
+              <option value="all">All Dates</option>
+              <option value="today">Today</option>
+              <option value="7days">Past 7 Days</option>
+              <option value="30days">Past 30 Days</option>
+              <option value="thisMonth">This Month</option>
+              <option value="custom">Custom Date Range...</option>
+            </select>
+          </div>
+
+          {/* Favorites Filter Button */}
           <button
             id="btn-filter-favorites"
             onClick={() => {
@@ -234,9 +361,9 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
               }
               setOnlyFavorites(!onlyFavorites);
             }}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               onlyFavorites
-                ? "bg-amber-50 text-amber-900 border-amber-300"
+                ? "bg-amber-50 text-amber-900 border-amber-300 shadow-2xs"
                 : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
             }`}
           >
@@ -244,6 +371,68 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             <span>Favorites</span>
           </button>
         </div>
+
+        {/* Custom Date Range Picker Inputs */}
+        {filterDatePreset === "custom" && (
+          <div className="p-2.5 bg-slate-50/90 border border-slate-200 rounded-xl space-y-2 text-xs animate-fadeIn">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+              <span>Filter by Date Range:</span>
+              {(customStartDate || customEndDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomStartDate("");
+                    setCustomEndDate("");
+                  }}
+                  className="text-indigo-600 hover:text-indigo-700 underline font-medium cursor-pointer"
+                >
+                  Clear dates
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="input-filter-start-date" className="block text-[10px] text-slate-500 mb-0.5 font-medium">
+                  From:
+                </label>
+                <input
+                  id="input-filter-start-date"
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="input-filter-end-date" className="block text-[10px] text-slate-500 mb-0.5 font-medium">
+                  To:
+                </label>
+                <input
+                  id="input-filter-end-date"
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reset active filters button */}
+        {hasActiveFilters && (
+          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+            <span className="text-slate-500">Filters active ({filteredEntries.length} results)</span>
+            <button
+              id="btn-reset-history-filters"
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset filters</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* List Container */}
@@ -253,8 +442,16 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             <History className="w-8 h-8 mx-auto stroke-1" />
             <p className="text-sm font-semibold text-slate-700">No reflections found</p>
             <p className="text-xs">
-              {searchQuery ? "Try refining your search terms" : "Start your first reflection in the editor"}
+              {hasActiveFilters ? "Try adjusting your filters or search terms" : "Start your first reflection in the editor"}
             </p>
+            {hasActiveFilters && (
+              <button
+                onClick={handleResetFilters}
+                className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         ) : (
           filteredEntries.map((entry) => {
@@ -333,33 +530,50 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                 </p>
 
                 {/* Bottom Tags & Metrics */}
-                <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* Focus Area Tag */}
+                    {entry.topic && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold ${
+                          isActive
+                            ? "bg-slate-800 text-indigo-200 border border-slate-700"
+                            : "bg-indigo-50 text-indigo-700 border border-indigo-200/70"
+                        }`}
+                      >
+                        <Tag className="w-3 h-3 text-indigo-500" />
+                        {entry.topic}
+                      </span>
+                    )}
+
+                    {/* Mood Tag */}
                     {entry.mood && (
                       <span
                         className={`px-2 py-0.5 rounded-lg font-semibold ${
                           isActive
-                            ? "bg-slate-800 text-indigo-300 border border-slate-700"
+                            ? "bg-slate-800 text-slate-300 border border-slate-700"
                             : "bg-slate-100 text-slate-700 border border-slate-200"
                         }`}
                       >
                         {entry.mood}
                       </span>
                     )}
+
+                    {/* Summary Tag */}
                     {entry.summary && (
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold ${
-                          isActive ? "bg-indigo-950/60 text-indigo-300 border border-indigo-800/40" : "bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                          isActive ? "bg-indigo-950/60 text-indigo-300 border border-indigo-800/40" : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
                         }`}
                       >
-                        <Sparkles className="w-3 h-3 text-indigo-500" />
+                        <Sparkles className="w-3 h-3 text-emerald-500" />
                         Synthesized
                       </span>
                     )}
                   </div>
 
                   <div
-                    className={`flex items-center gap-2 font-medium ${
+                    className={`flex items-center gap-2 font-medium ml-auto ${
                       isActive ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
@@ -367,10 +581,12 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                       <MessageSquare className="w-3 h-3" />
                       {entry.messages.length}
                     </span>
-                    <span>
-                      {new Date(entry.updatedAt).toLocaleDateString(undefined, {
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      {new Date(entry.createdAt).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",
+                        year: new Date(entry.createdAt).getFullYear() !== new Date().getFullYear() ? "numeric" : undefined
                       })}
                     </span>
                   </div>
