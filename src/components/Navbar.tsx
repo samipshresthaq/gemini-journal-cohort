@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   Loader2, 
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  User as UserIcon
 } from "lucide-react";
 
 interface NavbarProps {
@@ -18,6 +19,7 @@ interface NavbarProps {
   onNewEntry: () => void;
   onToggleHistory: () => void;
   isHistoryOpen: boolean;
+  onOpenProfile: () => void;
   saveStatus: SaveStatus;
   onRetrySave?: () => void;
   onToggleWalkthrough: () => void;
@@ -30,6 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNewEntry,
   onToggleHistory,
   isHistoryOpen,
+  onOpenProfile,
   saveStatus,
   onRetrySave,
   onToggleWalkthrough,
@@ -130,20 +133,30 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>New Entry</span>
             </button>
 
-            {/* User Profile and Sign Out */}
-            <div className="flex items-center pl-2 border-l border-slate-200 gap-2">
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName || "User"}
-                  className="w-8 h-8 rounded-full border border-slate-200 object-cover ring-2 ring-slate-100"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold">
-                  {(user.displayName || user.email || "U")[0].toUpperCase()}
-                </div>
-              )}
+            {/* User Profile Trigger and Sign Out */}
+            <div className="flex items-center pl-2 border-l border-slate-200 gap-1.5">
+              <button
+                id="btn-nav-user-profile"
+                onClick={onOpenProfile}
+                title="View Profile & Stats"
+                className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-xl hover:bg-slate-100 text-slate-700 border border-transparent hover:border-slate-200 transition-all cursor-pointer text-xs font-semibold"
+              >
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || "User"}
+                    className="w-7 h-7 rounded-full border border-slate-200 object-cover ring-2 ring-slate-100"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                    {(user.displayName || user.email || "U")[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="hidden lg:inline max-w-[100px] truncate">
+                  {user.displayName || (user.email ? user.email.split("@")[0] : "Guest")}
+                </span>
+              </button>
 
               <button
                 id="btn-nav-sign-out"

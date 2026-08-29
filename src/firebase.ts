@@ -3,7 +3,9 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
-  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut as fbSignOut, 
   onAuthStateChanged,
   User as FbUser,
@@ -57,6 +59,48 @@ export async function signInWithGoogle() {
     console.error("Firebase Google Sign-In Error:", error);
     throw error;
   }
+}
+
+/**
+ * Sign in with Email and Password
+ */
+export async function signInWithEmail(email: string, pass: string) {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email.trim(), pass);
+    return result.user;
+  } catch (error: any) {
+    console.error("Firebase Email Sign-In Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Register a new user with Email and Password
+ */
+export async function signUpWithEmail(email: string, pass: string, displayName?: string) {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+    if (displayName && displayName.trim() && result.user) {
+      await updateProfile(result.user, {
+        displayName: displayName.trim(),
+      });
+    }
+    return result.user;
+  } catch (error: any) {
+    console.error("Firebase Email Sign-Up Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Update authenticated user's profile display name or photo
+ */
+export async function updateUserProfile(data: { displayName?: string; photoURL?: string }) {
+  if (!auth.currentUser) {
+    throw new Error("No active authenticated user to update.");
+  }
+  await updateProfile(auth.currentUser, data);
+  return auth.currentUser;
 }
 
 /**

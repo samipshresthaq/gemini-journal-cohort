@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { AuthUser, JournalEntry, JournalMessage, SaveStatus } from "./types";
 import { 
   signInWithGoogle, 
+  signInWithEmail,
+  signUpWithEmail,
   signOutUser, 
   subscribeToAuth 
 } from "./firebase";
@@ -18,6 +20,7 @@ import { LandingPage } from "./components/LandingPage";
 import { JournalEditor } from "./components/JournalEditor";
 import { JournalHistory } from "./components/JournalHistory";
 import { WalkthroughGuide } from "./components/WalkthroughGuide";
+import { ProfileModal } from "./components/ProfileModal";
 import { Loader2 } from "lucide-react";
 
 const GUEST_SESSION_KEY = "gemini_journal_active_guest";
@@ -31,6 +34,7 @@ export default function App() {
   const [activeEntry, setActiveEntry] = useState<JournalEntry | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWalkthroughOpen, setIsWalkthroughOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const [isGeneratingReply, setIsGeneratingReply] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -138,10 +142,56 @@ export default function App() {
         err?.code === "auth/cancelled-popup-request";
       setAuthError(
         isNetworkOrPopupError
-          ? "Google Sign-In popup could not complete. If you are in an embedded preview, click 'Continue as Guest' or open the app in a new tab."
+          ? "Google Sign-In popup could not complete. If you are in an embedded preview, use Email & Password, click 'Continue as Guest', or open the app in a new tab."
           : err?.message || "Google Sign-In encountered an issue."
       );
       setAuthLoading(false);
+    }
+  };
+
+  const handleEmailSignIn = async (email: string, pass: string) => {
+    setAuthError(null);
+    try {
+      await signInWithEmail(email, pass);
+    } catch (err: any) {
+      console.error("Email sign-in failed:", err);
+      let userFriendlyMsg = "Could not sign in with provided email and password.";
+      if (
+        err?.code === "auth/invalid-credential" || 
+        err?.code === "auth/wrong-password" || 
+        err?.code === "auth/user-not-found"
+      ) {
+        userFriendlyMsg = "Incorrect email or password. Please verify your details or create an account.";
+      } else if (err?.code === "auth/invalid-email") {
+        userFriendlyMsg = "The email address is formatted incorrectly.";
+      } else if (err?.code === "auth/too-many-requests") {
+        userFriendlyMsg = "Too many failed login attempts. Please wait a moment and try again.";
+      } else if (err?.message) {
+        userFriendlyMsg = err.message;
+      }
+      setAuthError(userFriendlyMsg);
+      throw err;
+    }
+  };
+
+  const handleEmailSignUp = async (email: string, pass: string, name?: string) => {
+    setAuthError(null);
+    try {
+      await signUpWithEmail(email, pass, name);
+    } catch (err: any) {
+      console.error("Email sign-up failed:", err);
+      let userFriendlyMsg = "Could not create account with email.";
+      if (err?.code === "auth/email-already-in-use") {
+        userFriendlyMsg = "An account with this email address already exists. Please log in instead.";
+      } else if (err?.code === "auth/weak-password") {
+        userFriendlyMsg = "Password should be at least 6 characters long.";
+      } else if (err?.code === "auth/invalid-email") {
+        userFriendlyMsg = "Please provide a valid email address.";
+      } else if (err?.message) {
+        userFriendlyMsg = err.message;
+      }
+      setAuthError(userFriendlyMsg);
+      throw err;
     }
   };
 
@@ -173,12 +223,14 @@ export default function App() {
       setUser(null);
       setActiveEntry(null);
       setEntries([]);
+      setIsProfileOpen(false);
     } catch (err) {
       console.error("Sign out error:", err);
       localStorage.removeItem(GUEST_SESSION_KEY);
       setUser(null);
       setActiveEntry(null);
       setEntries([]);
+      setIsProfileOpen(false);
     }
   };
 
@@ -378,6 +430,7 @@ export default function App() {
         onNewEntry={handleNewEntry}
         onToggleHistory={() => setIsHistoryOpen((prev) => !prev)}
         isHistoryOpen={isHistoryOpen}
+        onOpenProfile={() => setIsProfileOpen(true)}
         saveStatus={saveStatus}
         onRetrySave={() => activeEntry && persistEntry(activeEntry)}
         onToggleWalkthrough={() => setIsWalkthroughOpen((prev) => !prev)}
@@ -389,6 +442,8 @@ export default function App() {
         {!user ? (
           <LandingPage
             onSignIn={handleSignIn}
+            onEmailSignIn={handleEmailSignIn}
+            onEmailSignUp={handleEmailSignUp}
             onGuestSignIn={handleGuestSignIn}
             isLoading={authLoading}
             errorMessage={authError}
@@ -431,6 +486,18 @@ export default function App() {
         />
       )}
 
+      {/* Profile Modal */}
+      {user && (
+        <ProfileModal
+          isOpen={isProfileOpen}
+          onClose={() => setIsProfileOpen(false)}
+          user={user}
+          entries={entries}
+          onSignOut={handleSignOut}
+          onProfileUpdated={(updated) => setUser(updated)}
+        />
+      )}
+
       {/* Verification Walkthrough Modal */}
       <WalkthroughGuide
         isOpen={isWalkthroughOpen}
@@ -439,3 +506,4 @@ export default function App() {
     </div>
   );
 }
+
