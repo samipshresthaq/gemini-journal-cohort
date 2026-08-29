@@ -45,3 +45,17 @@ export interface PromptStarter {
   prompt: string;
   iconName: string;
 }
+
+export type VoiceMode = 'dictate' | 'handsfree' | 'audio-record';
+
+export interface VoiceStatus {
+  isListening: boolean;
+  isRecordingAudio: boolean;
+  isTranscribing: boolean;
+  interimTranscript: string;
+  audioVolume: number;
+  lastCommand: string | null;
+  error: string | null;
+  isSupported: boolean;
+  voiceMode: VoiceMode;
+}

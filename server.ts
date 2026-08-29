@@ -193,6 +193,55 @@ Generate a concise, deeply structured summary in JSON format conforming to this 
     }
   });
 
+  // Audio Multimodal Voice Transcription Endpoint
+  app.post("/api/gemini/transcribe", async (req: Request, res: Response) => {
+    try {
+      // Defensive Payload Ingestion (Null-Safe Destructuring)
+      const body = (req.body && typeof req.body === "object") ? req.body : {};
+      const { audioBase64, mimeType } = body;
+
+      if (!audioBase64 || typeof audioBase64 !== "string") {
+        res.status(400).json({ error: "Invalid payload: 'audioBase64' string is required." });
+        return;
+      }
+
+      const audioType = mimeType || "audio/webm";
+
+      const contents = [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: audioType,
+                data: audioBase64.replace(/^data:audio\/[a-z0-9]+;base64,/, ""),
+              },
+            },
+            {
+              text: "Transcribe this spoken journal entry verbatim into clear, natural prose. Preserve emotional nuances, correct minor speech disfluencies, and apply clean punctuation and paragraph breaks. Return ONLY the transcribed text without extra commentary or timestamps.",
+            },
+          ],
+        },
+      ];
+
+      const result = await generateContentWithFallback({
+        contents,
+        systemInstruction: "You are an expert, precise speech-to-text transcriber for personal journaling.",
+        temperature: 0.2,
+      });
+
+      res.json({
+        transcript: result.text.trim(),
+        modelUsed: result.modelUsed,
+      });
+    } catch (error: any) {
+      console.error("[API Error] /api/gemini/transcribe:", error);
+      res.status(500).json({
+        error: error.message || "Failed to transcribe audio with Gemini API.",
+      });
+    }
+  });
+
   // Vite Middleware configuration
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

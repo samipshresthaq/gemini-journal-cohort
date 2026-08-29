@@ -60,14 +60,39 @@ gcloud services enable \
 
 ---
 
-### 2. Secret Manager Setup (Zero-Hardcoding Hygiene)
+### 2. Secret Manager Setup & Leaked API Key Revocation Protocol
 
-Securely store your Gemini API key in Secret Manager:
+#### 🚨 Step 2.1: Revoke the Leaked API Key Immediately
+If an API key from `firebase-applet-config.json` or any configuration file was exposed:
+1. Open [Google Cloud Console > APIs & Services > Credentials](https://console.cloud.google.com/apis/credentials).
+2. Locate the compromised API key and click **Delete** (or use the gcloud CLI):
+   ```bash
+   # List existing API keys
+   gcloud services api-keys list
 
+   # Delete / Revoke the compromised API key
+   gcloud services api-keys delete projects/$PROJECT_ID/locations/global/keys/YOUR_LEAKED_KEY_ID
+   ```
+
+#### 🔄 Step 2.2: Create and Restrict a Rotated API Key
+1. Create a newly rotated API key:
+   ```bash
+   gcloud services api-keys create --display-name="firebase-web-client-key" \
+     --api-target=service=identitytoolkit.googleapis.com \
+     --api-target=service=firestore.googleapis.com
+   ```
+2. Apply **HTTP Referrer Restrictions** in the Google Cloud Console so the rotated key can ONLY be called from your verified domains (e.g. `https://your-cloud-run-url.run.app/*`, `http://localhost:3000/*`).
+
+#### 🔒 Step 2.3: Store Secrets in Secret Manager & Protect Git Repository
+1. `firebase-applet-config.json` and any local credential files are added to `.gitignore` to prevent committing secrets to version control.
+2. Store your API keys in Google Cloud Secret Manager:
 ```bash
-# 1. Create and populate the secret
+# 1. Create and populate Gemini and Firebase secrets
 gcloud secrets create GEMINI_API_KEY --replication-policy="automatic"
 echo -n "YOUR_GEMINI_API_KEY" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
+
+gcloud secrets create FIREBASE_API_KEY --replication-policy="automatic"
+echo -n "YOUR_ROTATED_FIREBASE_API_KEY" | gcloud secrets versions add FIREBASE_API_KEY --data-file=-
 
 # 2. Identify your Cloud Run service account
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
@@ -77,7 +102,12 @@ export RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding FIREBASE_API_KEY \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/secretmanager.secretAccessor"
 ```
+
 
 ---
 

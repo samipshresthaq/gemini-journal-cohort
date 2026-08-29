@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { AuthUser, JournalEntry, JournalMessage, PromptStarter, SaveStatus } from "../types";
 import { PromptStarters } from "./PromptStarters";
 import { SummaryCard } from "./SummaryCard";
+import { VoiceControlPanel } from "./VoiceControlPanel";
+import { useVoiceDictation } from "../hooks/useVoiceDictation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { 
@@ -18,7 +20,9 @@ import {
   Save, 
   Check, 
   Copy,
-  ChevronDown
+  ChevronDown,
+  Mic,
+  MicOff
 } from "lucide-react";
 
 interface JournalEditorProps {
@@ -91,6 +95,33 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       handleSend();
     }
   };
+
+  // Voice Dictation hook
+  const voice = useVoiceDictation({
+    onTranscriptChange: (newChunk, isFinal) => {
+      setInputText((prev) => {
+        const trimmed = prev.trim();
+        if (!trimmed) return newChunk.trim();
+        return `${trimmed} ${newChunk.trim()}`;
+      });
+    },
+    onVoiceCommandSend: () => {
+      // Hands-free voice trigger: send reflection
+      setInputText((currentText) => {
+        if (currentText.trim()) {
+          onSendMessage(currentText.trim());
+          return "";
+        }
+        return currentText;
+      });
+    },
+    onVoiceCommandSummary: () => {
+      onGenerateSummary();
+    },
+    onVoiceCommandClear: () => {
+      setInputText("");
+    },
+  });
 
   const handleSelectStarter = (starter: PromptStarter) => {
     setInputText(starter.prompt);
@@ -345,6 +376,32 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         </div>
       )}
 
+      {/* Voice Control & Hands-Free Input Panel */}
+      <VoiceControlPanel
+        isListening={voice.isListening}
+        isRecordingAudio={voice.isRecordingAudio}
+        isTranscribing={voice.isTranscribing}
+        interimTranscript={voice.interimTranscript}
+        audioVolume={voice.audioVolume}
+        lastCommand={voice.lastCommand}
+        error={voice.error}
+        isSupported={voice.isSupported}
+        voiceMode={voice.voiceMode}
+        onSetVoiceMode={voice.setVoiceMode}
+        onStartListening={voice.startListening}
+        onStopListening={voice.stopListening}
+        onStartAudioRecording={voice.startAudioRecording}
+        onStopAudioRecording={voice.stopAudioRecording}
+        onManualTriggerSend={() => {
+          if (inputText.trim()) {
+            handleSend();
+          }
+        }}
+        onManualTriggerSummary={() => {
+          onGenerateSummary();
+        }}
+      />
+
       {/* Message Input Workspace */}
       <form
         id="journal-input-form"
@@ -361,8 +418,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={
               entry.messages.length === 0
-                ? "Write your thoughts, feelings, daily events, or choose a starter above..."
-                : "Continue your reflection, ask Gemini for advice, or explore a deeper angle..."
+                ? "Write your thoughts, speak into the mic above, or choose a prompt starter..."
+                : "Continue your reflection, speak naturally hands-free, or ask Gemini..."
             }
             className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 placeholder:text-slate-400 focus:ring-0 leading-relaxed max-h-48"
           />
@@ -370,10 +427,58 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
         <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
           <div className="text-slate-400 hidden sm:block font-medium">
-            Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> to reflect
+            Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> or say <strong className="text-indigo-600 font-semibold">"Reflect"</strong> to send hands-free
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
+            {/* Quick Mic Action in Toolbar */}
+            <button
+              id="btn-composer-quick-mic"
+              type="button"
+              onClick={() => {
+                if (voice.isListening || voice.isRecordingAudio) {
+                  voice.stopListening();
+                  voice.stopAudioRecording();
+                } else {
+                  if (voice.voiceMode === "audio-record") {
+                    voice.startAudioRecording();
+                  } else {
+                    voice.startListening();
+                  }
+                }
+              }}
+              title={voice.isListening ? "Stop listening" : "Start hands-free voice input"}
+              className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
+                voice.isListening || voice.isRecordingAudio
+                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse"
+                  : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200"
+              }`}
+            >
+              {voice.isListening || voice.isRecordingAudio ? (
+                <>
+                  <Mic className="w-3.5 h-3.5" />
+                  <span className="text-xs font-semibold hidden md:inline">Listening...</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="text-xs font-semibold hidden md:inline">Voice</span>
+                </>
+              )}
+            </button>
+
+            {/* Clear Draft if text present */}
+            {inputText.trim() && (
+              <button
+                id="btn-composer-clear"
+                type="button"
+                onClick={() => setInputText("")}
+                className="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+
             <button
               id="btn-send-reflection-prompt"
               type="submit"

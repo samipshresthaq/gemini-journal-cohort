@@ -93,6 +93,30 @@ const TEST_CASES: TestCase[] = [
     ],
     expected: "Realtime filtered list reacts instantly; export saves file; deletion updates list in realtime.",
   },
+  {
+    id: "TC-07",
+    category: "Voice Control & Dictation",
+    title: "Hands-Free Live Speech-to-Text Input",
+    steps: [
+      "Click the Microphone icon on the Voice Control Panel or the composer toolbar.",
+      "Allow microphone access in the browser when prompted.",
+      "Speak a thought or reflection out loud into your microphone.",
+      "Observe the dynamic audio waveform equalizer and live streaming speech preview.",
+    ],
+    expected: "Spoken speech is accurately transcribed in realtime and appended to the reflection prompt textarea.",
+  },
+  {
+    id: "TC-08",
+    category: "Voice Control & Dictation",
+    title: "Hands-Free Spoken Voice Commands & Gemini HD Audio",
+    steps: [
+      "With Voice listening active, speak the command 'Reflect' or 'Send reflection'.",
+      "Notice the reflection is automatically submitted to Gemini hands-free.",
+      "Switch to 'Gemini HD Audio' mode, record a spoken snippet, and click stop.",
+      "Observe Gemini 3.6 Flash multimodal transcription transcribing with punctuation and nuance.",
+    ],
+    expected: "Hands-free commands trigger actions directly; Gemini audio transcription parses audio verbatim.",
+  },
 ];
 
 export const WalkthroughGuide: React.FC<WalkthroughGuideProps> = ({
