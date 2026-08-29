@@ -20,6 +20,8 @@ import { JournalHistory } from "./components/JournalHistory";
 import { WalkthroughGuide } from "./components/WalkthroughGuide";
 import { Loader2 } from "lucide-react";
 
+const GUEST_SESSION_KEY = "gemini_journal_active_guest";
+
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -54,7 +56,7 @@ export default function App() {
     };
   }, []);
 
-  // 1. Listen to Firebase Authentication state
+  // 1. Listen to Firebase Authentication state & restore guest session if present
   useEffect(() => {
     const unsubscribe = subscribeToAuth((fbUser) => {
       if (fbUser) {
@@ -65,10 +67,23 @@ export default function App() {
           photoURL: fbUser.photoURL,
         };
         setUser(authUserData);
+        localStorage.removeItem(GUEST_SESSION_KEY);
       } else {
-        setUser(null);
-        setActiveEntry(null);
-        setEntries([]);
+        // Check if a local guest session exists
+        try {
+          const storedGuest = localStorage.getItem(GUEST_SESSION_KEY);
+          if (storedGuest) {
+            setUser(JSON.parse(storedGuest));
+          } else {
+            setUser(null);
+            setActiveEntry(null);
+            setEntries([]);
+          }
+        } catch (e) {
+          setUser(null);
+          setActiveEntry(null);
+          setEntries([]);
+        }
       }
       setAuthLoading(false);
     });
@@ -101,8 +116,8 @@ export default function App() {
         }
       },
       (err) => {
-        console.error("Failed to load user entries from Firestore:", err);
-        setErrorMessage("Could not synchronize entries with Cloud Firestore.");
+        console.error("Failed to load user entries:", err);
+        setErrorMessage("Could not synchronize entries.");
       }
     );
 
@@ -117,16 +132,53 @@ export default function App() {
       await signInWithGoogle();
     } catch (err: any) {
       console.error("Sign-in failed:", err);
-      setAuthError(err?.message || "Google Sign-In was cancelled or encountered an issue.");
+      const isNetworkOrPopupError = 
+        err?.code === "auth/popup-blocked" || 
+        err?.code === "auth/network-request-failed" ||
+        err?.code === "auth/cancelled-popup-request";
+      setAuthError(
+        isNetworkOrPopupError
+          ? "Google Sign-In popup could not complete. If you are in an embedded preview, click 'Continue as Guest' or open the app in a new tab."
+          : err?.message || "Google Sign-In encountered an issue."
+      );
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGuestSignIn = () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+      const guestUser: AuthUser = {
+        uid: guestId,
+        email: null,
+        displayName: "Guest Explorer",
+        photoURL: null,
+      };
+      localStorage.setItem(GUEST_SESSION_KEY, JSON.stringify(guestUser));
+      setUser(guestUser);
+      setAuthLoading(false);
+    } catch (err: any) {
+      console.error("Guest sign-in failed:", err);
+      setAuthError("Guest initialization encountered an issue.");
       setAuthLoading(false);
     }
   };
 
   const handleSignOut = async () => {
     try {
+      localStorage.removeItem(GUEST_SESSION_KEY);
       await signOutUser();
+      setUser(null);
+      setActiveEntry(null);
+      setEntries([]);
     } catch (err) {
       console.error("Sign out error:", err);
+      localStorage.removeItem(GUEST_SESSION_KEY);
+      setUser(null);
+      setActiveEntry(null);
+      setEntries([]);
     }
   };
 
@@ -337,6 +389,7 @@ export default function App() {
         {!user ? (
           <LandingPage
             onSignIn={handleSignIn}
+            onGuestSignIn={handleGuestSignIn}
             isLoading={authLoading}
             errorMessage={authError}
           />

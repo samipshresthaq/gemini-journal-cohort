@@ -3,6 +3,7 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInAnonymously,
   signOut as fbSignOut, 
   onAuthStateChanged,
   User as FbUser,
@@ -76,3 +77,4 @@ export async function signOutUser() {
 export function subscribeToAuth(callback: (user: FbUser | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
+

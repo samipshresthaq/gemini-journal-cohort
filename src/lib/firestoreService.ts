@@ -29,6 +29,31 @@ export function sanitizeForFirestore<T>(data: T): T {
   );
 }
 
+// LocalStorage keys for Guest Mode
+const GUEST_STORAGE_PREFIX = "gemini_journal_guest_entries_";
+
+function getGuestEntries(userId: string): JournalEntry[] {
+  try {
+    const raw = localStorage.getItem(`${GUEST_STORAGE_PREFIX}${userId}`);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.warn("Could not read guest entries from localStorage:", err);
+  }
+  return [];
+}
+
+function saveGuestEntries(userId: string, entries: JournalEntry[]) {
+  try {
+    localStorage.setItem(`${GUEST_STORAGE_PREFIX}${userId}`, JSON.stringify(entries));
+    // Trigger custom event for real-time reactivity in guest mode
+    window.dispatchEvent(new CustomEvent(`guest_entries_updated_${userId}`, { detail: entries }));
+  } catch (err) {
+    console.warn("Could not write guest entries to localStorage:", err);
+  }
+}
+
 /**
  * Save or update a Journal Entry for a specific isolated user
  */
@@ -38,6 +63,24 @@ export async function saveJournalEntry(userId: string, entry: JournalEntry): Pro
   }
   if (!entry.id) {
     throw new Error("Entry ID is required.");
+  }
+
+  // Handle Guest Mode locally
+  if (userId.startsWith("guest_")) {
+    const entries = getGuestEntries(userId);
+    const updatedEntry = {
+      ...entry,
+      userId,
+      updatedAt: Date.now(),
+    };
+    const index = entries.findIndex((e) => e.id === entry.id);
+    if (index >= 0) {
+      entries[index] = updatedEntry;
+    } else {
+      entries.unshift(updatedEntry);
+    }
+    saveGuestEntries(userId, entries);
+    return;
   }
 
   const entryRef = doc(db, "users", userId, "entries", entry.id);
@@ -61,6 +104,23 @@ export function subscribeToUserEntries(
   if (!userId) {
     onUpdate([]);
     return () => {};
+  }
+
+  // Handle Guest Mode with event-driven local subscriptions
+  if (userId.startsWith("guest_")) {
+    onUpdate(getGuestEntries(userId));
+    const listener = (event: Event) => {
+      const custom = event as CustomEvent<JournalEntry[]>;
+      if (custom.detail) {
+        onUpdate(custom.detail);
+      } else {
+        onUpdate(getGuestEntries(userId));
+      }
+    };
+    window.addEventListener(`guest_entries_updated_${userId}`, listener);
+    return () => {
+      window.removeEventListener(`guest_entries_updated_${userId}`, listener);
+    };
   }
 
   const entriesRef = collection(db, "users", userId, "entries");
@@ -102,6 +162,13 @@ export async function deleteJournalEntry(userId: string, entryId: string): Promi
   if (!userId || !entryId) {
     throw new Error("User ID and Entry ID are required to delete entry.");
   }
+
+  if (userId.startsWith("guest_")) {
+    const entries = getGuestEntries(userId).filter((e) => e.id !== entryId);
+    saveGuestEntries(userId, entries);
+    return;
+  }
+
   const entryRef = doc(db, "users", userId, "entries", entryId);
   await deleteDoc(entryRef);
 }
@@ -115,6 +182,18 @@ export async function toggleEntryFavorite(
   isFavorite: boolean
 ): Promise<void> {
   if (!userId || !entryId) return;
+
+  if (userId.startsWith("guest_")) {
+    const entries = getGuestEntries(userId);
+    const target = entries.find((e) => e.id === entryId);
+    if (target) {
+      target.isFavorite = isFavorite;
+      target.updatedAt = Date.now();
+      saveGuestEntries(userId, entries);
+    }
+    return;
+  }
+
   const entryRef = doc(db, "users", userId, "entries", entryId);
   await updateDoc(entryRef, {
     isFavorite,
