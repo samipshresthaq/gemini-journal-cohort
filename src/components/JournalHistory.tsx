@@ -149,7 +149,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
               <History className="w-4 h-4" />
             </div>
             <h2 className="font-extrabold text-slate-900 text-lg">
-              {isGuest ? "Guest Conversations" : "Reflection History"}
+              {isGuest ? "Guest Reflections" : "Reflection History"}
             </h2>
             <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-semibold border border-slate-200">
               {entries.length}{isGuest ? `/${maxGuestEntries}` : ""} {entries.length === 1 ? "entry" : "entries"}
@@ -169,7 +169,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-slate-700 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-              <span>Guest session: Max {maxGuestEntries} conversations allowed.</span>
+              <span>Guest session: Max {maxGuestEntries} reflection entries allowed.</span>
             </div>
             <button
               onClick={() => onRequireAuth?.(

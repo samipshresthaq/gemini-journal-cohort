@@ -25,7 +25,8 @@ import { AuthModal } from "./components/AuthModal";
 import { Loader2 } from "lucide-react";
 
 const GUEST_SESSION_KEY = "gemini_journal_active_guest";
-const MAX_GUEST_CONVERSATIONS = 2;
+const MAX_GUEST_ENTRIES = 2;
+const MAX_GUEST_CONVERSATIONS_PER_ENTRY = 2;
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -264,10 +265,10 @@ export default function App() {
   // Switch to a new empty reflection
   const handleNewEntry = () => {
     if (!user) return;
-    if (isGuest && entries.length >= MAX_GUEST_CONVERSATIONS) {
+    if (isGuest && entries.length >= MAX_GUEST_ENTRIES) {
       triggerAuthModal(
-        "Guest Limit Reached (2 of 2 Conversations)",
-        "Guest mode allows a maximum of 2 active conversations. Sign in with Google or Email to unlock unlimited reflections, history sync, and AI growth summaries."
+        `Guest Entry Limit Reached (${MAX_GUEST_ENTRIES} of ${MAX_GUEST_ENTRIES} Entries)`,
+        `Guest mode allows a maximum of ${MAX_GUEST_ENTRIES} reflection entries. Sign in with Google or Email to unlock unlimited reflections, history sync, and AI growth summaries.`
       );
       return;
     }
@@ -304,6 +305,18 @@ export default function App() {
   // Send a reflection prompt (User & Gemini message flow)
   const handleSendMessage = async (content: string) => {
     if (!user || !activeEntry) return;
+
+    // Enforce guest limit of max 2 conversations per entry
+    if (isGuest) {
+      const userMessageCount = activeEntry.messages.filter((m) => m.role === "user").length;
+      if (userMessageCount >= MAX_GUEST_CONVERSATIONS_PER_ENTRY) {
+        triggerAuthModal(
+          `Conversation Limit Reached (${MAX_GUEST_CONVERSATIONS_PER_ENTRY} of ${MAX_GUEST_CONVERSATIONS_PER_ENTRY} in this Entry)`,
+          `Guest mode allows up to ${MAX_GUEST_CONVERSATIONS_PER_ENTRY} conversations with Gemini per reflection entry. Sign in with an account to continue reflecting indefinitely${entries.length < MAX_GUEST_ENTRIES ? " or create your second entry." : "."}`
+        );
+        return;
+      }
+    }
 
     const userMessage: JournalMessage = {
       id: `msg_${Date.now()}_u`,
@@ -470,7 +483,7 @@ export default function App() {
   }
 
   const currentGuestIndex = entries.findIndex((e) => e.id === activeEntry?.id);
-  const activeGuestConversationIndex = currentGuestIndex >= 0 ? currentGuestIndex + 1 : Math.min(entries.length + 1, MAX_GUEST_CONVERSATIONS);
+  const activeGuestEntryIndex = currentGuestIndex >= 0 ? currentGuestIndex + 1 : Math.min(entries.length + 1, MAX_GUEST_ENTRIES);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
@@ -479,7 +492,7 @@ export default function App() {
         user={user}
         isGuest={isGuest}
         guestEntryCount={entries.length}
-        maxGuestEntries={MAX_GUEST_CONVERSATIONS}
+        maxGuestEntries={MAX_GUEST_ENTRIES}
         onOpenAuthModal={triggerAuthModal}
         onSignOut={handleSignOut}
         onNewEntry={handleNewEntry}
@@ -490,6 +503,7 @@ export default function App() {
         onRetrySave={() => activeEntry && persistEntry(activeEntry)}
         onToggleWalkthrough={() => setIsWalkthroughOpen((prev) => !prev)}
         isWalkthroughOpen={isWalkthroughOpen}
+        showTestGuide={!import.meta.env.VITE_PROD}
       />
 
       {/* Main Workspace Area */}
@@ -518,8 +532,11 @@ export default function App() {
             saveStatus={saveStatus}
             onRetrySave={() => persistEntry(activeEntry)}
             errorMessage={errorMessage}
-            guestConversationIndex={activeGuestConversationIndex}
-            maxGuestConversations={MAX_GUEST_CONVERSATIONS}
+            guestEntryIndex={activeGuestEntryIndex}
+            maxGuestEntries={MAX_GUEST_ENTRIES}
+            totalGuestEntries={entries.length}
+            maxGuestConversationsPerEntry={MAX_GUEST_CONVERSATIONS_PER_ENTRY}
+            onNewEntry={handleNewEntry}
           />
         ) : (
           <div className="text-center py-24 space-y-4">
@@ -540,7 +557,7 @@ export default function App() {
           entries={entries}
           activeEntryId={activeEntry?.id || null}
           isGuest={isGuest}
-          maxGuestEntries={MAX_GUEST_CONVERSATIONS}
+          maxGuestEntries={MAX_GUEST_ENTRIES}
           onRequireAuth={triggerAuthModal}
           onSelectEntry={(entry) => setActiveEntry(entry)}
           onDeleteEntry={handleDeleteEntry}

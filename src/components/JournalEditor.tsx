@@ -40,8 +40,11 @@ interface JournalEditorProps {
   saveStatus: SaveStatus;
   onRetrySave: () => void;
   errorMessage?: string | null;
-  guestConversationIndex?: number;
-  maxGuestConversations?: number;
+  guestEntryIndex?: number;
+  maxGuestEntries?: number;
+  totalGuestEntries?: number;
+  maxGuestConversationsPerEntry?: number;
+  onNewEntry?: () => void;
 }
 
 const MOODS = [
@@ -77,13 +80,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   saveStatus,
   onRetrySave,
   errorMessage,
-  guestConversationIndex = 1,
-  maxGuestConversations = 2,
+  guestEntryIndex = 1,
+  maxGuestEntries = 2,
+  totalGuestEntries = 1,
+  maxGuestConversationsPerEntry = 2,
+  onNewEntry,
 }) => {
   const [inputText, setInputText] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const userConversationCount = entry.messages.filter((m) => m.role === "user").length;
+  const isEntryConversationLimitReached = isGuest && userConversationCount >= maxGuestConversationsPerEntry;
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -93,6 +102,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim() || isGeneratingReply) return;
+
+    if (isEntryConversationLimitReached) {
+      onRequireAuth?.(
+        `Conversation Limit Reached (${maxGuestConversationsPerEntry} of ${maxGuestConversationsPerEntry} in this Entry)`,
+        `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per reflection entry. Sign in with an account to continue conversing${totalGuestEntries < maxGuestEntries ? " or create your second entry." : "."}`
+      );
+      return;
+    }
+
     const textToSend = inputText.trim();
     setInputText("");
     await onSendMessage(textToSend);
@@ -201,31 +219,49 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               <MessageSquare className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold text-slate-900">
-                  Guest Conversation Mode ({guestConversationIndex} of {maxGuestConversations} conversations)
+                  Guest Mode (Entry {guestEntryIndex} of {maxGuestEntries})
                 </span>
-                <span className="text-[10px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.2 rounded-full border border-amber-300">
-                  Conversation Only
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                  isEntryConversationLimitReached
+                    ? "bg-rose-100 text-rose-800 border-rose-200"
+                    : "bg-amber-200/80 text-amber-900 border-amber-300"
+                }`}>
+                  Conversations: {userConversationCount}/{maxGuestConversationsPerEntry} in this entry
                 </span>
               </div>
-              <p className="text-xs text-slate-600 mt-0.5">
-                You can converse freely with Gemini in up to {maxGuestConversations} conversations. Advanced features (Summaries, Voice dictation, Cloud backup) require an account.
+              <p className="text-xs text-slate-600 mt-1">
+                {isEntryConversationLimitReached
+                  ? `You have reached the maximum of ${maxGuestConversationsPerEntry} conversations for this reflection. Sign in with an account to continue conversing without limits${totalGuestEntries < maxGuestEntries ? " or start your 2nd entry." : "."}`
+                  : `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per entry and ${maxGuestEntries} total entries. Advanced features (Summaries, Voice, Cloud backup) require an account.`}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            id="btn-guest-banner-sign-in"
-            onClick={() => onRequireAuth?.(
-              "Sign In to Unlock All Features",
-              "Create a free account to unlock unlimited conversations, AI growth summaries, voice dictation, and persistent cloud sync."
+          <div className="flex items-center gap-2 shrink-0">
+            {isEntryConversationLimitReached && totalGuestEntries < maxGuestEntries && onNewEntry && (
+              <button
+                type="button"
+                id="btn-guest-banner-new-entry"
+                onClick={onNewEntry}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-xs border border-slate-300 transition-colors cursor-pointer shadow-2xs"
+              >
+                Start Entry 2
+              </button>
             )}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-xs"
-          >
-            Sign In with Account
-          </button>
+            <button
+              type="button"
+              id="btn-guest-banner-sign-in"
+              onClick={() => onRequireAuth?.(
+                "Sign In to Unlock All Features",
+                "Create a free account to unlock unlimited conversations, unlimited entries, AI growth summaries, voice dictation, and persistent cloud sync."
+              )}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-xs"
+            >
+              Sign In with Account
+            </button>
+          </div>
         </div>
       )}
 
@@ -506,93 +542,145 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         onSubmit={handleSend}
         className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200/90 shadow-md ring-1 ring-slate-900/5 space-y-3 sticky bottom-4 z-30"
       >
-        <div className="relative">
-          <textarea
-            id="textarea-journal-prompt"
-            ref={textareaRef}
-            rows={3}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              entry.messages.length === 0
-                ? "Write your thoughts or choose a prompt starter to reflect with Gemini..."
-                : "Continue your conversation with Gemini..."
-            }
-            className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 placeholder:text-slate-400 focus:ring-0 leading-relaxed max-h-48"
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
-          <div className="text-slate-400 hidden sm:block font-medium">
-            Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> to send reflection
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            {/* Quick Mic Action in Toolbar */}
-            <button
-              id="btn-composer-quick-mic"
-              type="button"
-              onClick={handleQuickMicClick}
-              title={isGuest ? "Sign in to enable voice" : voice.isListening ? "Stop listening" : "Start hands-free voice input"}
-              className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
-                isGuest
-                  ? "bg-slate-100 hover:bg-slate-200/80 text-slate-500 border-slate-200"
-                  : voice.isListening || voice.isRecordingAudio
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse"
-                  : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200"
-              }`}
-            >
-              {isGuest ? (
-                <>
-                  <Mic className="w-3.5 h-3.5 text-slate-400" />
-                  <Lock className="w-3 h-3 text-amber-600" />
-                </>
-              ) : voice.isListening || voice.isRecordingAudio ? (
-                <>
-                  <Mic className="w-3.5 h-3.5" />
-                  <span className="text-xs font-semibold hidden md:inline">Listening...</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-3.5 h-3.5 text-slate-600" />
-                  <span className="text-xs font-semibold hidden md:inline">Voice</span>
-                </>
+        {isEntryConversationLimitReached ? (
+          <div className="bg-amber-50/95 border border-amber-200/90 rounded-xl p-3.5 text-left space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                <Lock className="w-4 h-4 text-amber-700" />
+                <span>Conversation Limit Reached for this Entry ({maxGuestConversationsPerEntry}/{maxGuestConversationsPerEntry})</span>
+              </div>
+              <span className="text-[10px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+                Max 2 Per Entry
+              </span>
+            </div>
+            <p className="text-xs text-amber-800">
+              You have used both allowed conversations in this reflection entry. Sign in with an account to continue reflecting without limits{totalGuestEntries < maxGuestEntries ? " or create your 2nd allowed guest entry." : "."}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              {totalGuestEntries < maxGuestEntries && onNewEntry && (
+                <button
+                  type="button"
+                  id="btn-guest-form-new-entry"
+                  onClick={onNewEntry}
+                  className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-xs border border-slate-300 transition-all cursor-pointer shadow-2xs"
+                >
+                  Start Entry 2
+                </button>
               )}
-            </button>
-
-            {/* Clear Draft if text present */}
-            {inputText.trim() && (
               <button
-                id="btn-composer-clear"
                 type="button"
-                onClick={() => setInputText("")}
-                className="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+                id="btn-guest-form-sign-in"
+                onClick={() => onRequireAuth?.(
+                  "Unlock Unlimited Conversations",
+                  "Sign in with Google or Email to continue this conversation and reflect without limits."
+                )}
+                className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-all cursor-pointer shadow-xs"
               >
-                Clear
+                Sign In with Account
               </button>
-            )}
-
-            <button
-              id="btn-send-reflection-prompt"
-              type="submit"
-              disabled={!inputText.trim() || isGeneratingReply}
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-2 shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {isGeneratingReply ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Thinking...</span>
-                </>
-              ) : (
-                <>
-                  <span>Reflect</span>
-                  <Send className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="relative">
+              <textarea
+                id="textarea-journal-prompt"
+                ref={textareaRef}
+                rows={3}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  entry.messages.length === 0
+                    ? "Write your thoughts or choose a prompt starter to reflect with Gemini..."
+                    : isGuest
+                    ? `Continue reflection with Gemini (Conversation ${userConversationCount + 1} of ${maxGuestConversationsPerEntry})...`
+                    : "Continue your conversation with Gemini..."
+                }
+                className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 placeholder:text-slate-400 focus:ring-0 leading-relaxed max-h-48"
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
+              <div className="text-slate-400 hidden sm:block font-medium">
+                {isGuest ? (
+                  <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                    Guest Conversation {userConversationCount + 1} of {maxGuestConversationsPerEntry}
+                  </span>
+                ) : (
+                  <>
+                    Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> to send reflection
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 ml-auto">
+                {/* Quick Mic Action in Toolbar */}
+                <button
+                  id="btn-composer-quick-mic"
+                  type="button"
+                  onClick={handleQuickMicClick}
+                  title={isGuest ? "Sign in to enable voice" : voice.isListening ? "Stop listening" : "Start hands-free voice input"}
+                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isGuest
+                      ? "bg-slate-100 hover:bg-slate-200/80 text-slate-500 border-slate-200"
+                      : voice.isListening || voice.isRecordingAudio
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse"
+                      : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {isGuest ? (
+                    <>
+                      <Mic className="w-3.5 h-3.5 text-slate-400" />
+                      <Lock className="w-3 h-3 text-amber-600" />
+                    </>
+                  ) : voice.isListening || voice.isRecordingAudio ? (
+                    <>
+                      <Mic className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold hidden md:inline">Listening...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-3.5 h-3.5 text-slate-600" />
+                      <span className="text-xs font-semibold hidden md:inline">Voice</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Clear Draft if text present */}
+                {inputText.trim() && (
+                  <button
+                    id="btn-composer-clear"
+                    type="button"
+                    onClick={() => setInputText("")}
+                    className="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+
+                <button
+                  id="btn-send-reflection-prompt"
+                  type="submit"
+                  disabled={!inputText.trim() || isGeneratingReply}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-2 shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isGeneratingReply ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Thinking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Reflect</span>
+                      <Send className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </form>
     </div>
   );
