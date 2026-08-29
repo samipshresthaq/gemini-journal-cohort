@@ -22,11 +22,15 @@ import {
   Copy,
   ChevronDown,
   Mic,
-  MicOff
+  MicOff,
+  Lock,
+  MessageSquare
 } from "lucide-react";
 
 interface JournalEditorProps {
   user: AuthUser;
+  isGuest?: boolean;
+  onRequireAuth?: (title?: string, description?: string) => void;
   entry: JournalEntry;
   onUpdateEntry: (entry: JournalEntry) => void;
   onSendMessage: (content: string) => Promise<void>;
@@ -36,6 +40,8 @@ interface JournalEditorProps {
   saveStatus: SaveStatus;
   onRetrySave: () => void;
   errorMessage?: string | null;
+  guestConversationIndex?: number;
+  maxGuestConversations?: number;
 }
 
 const MOODS = [
@@ -45,7 +51,6 @@ const MOODS = [
   { label: "🎯 Focused", value: "Focused" },
   { label: "🌊 Overwhelmed", value: "Overwhelmed" },
   { label: "🧘 Peaceful", value: "Peaceful" },
-  { label: "🌪️ Conflicted", value: "Conflicted" },
   { label: "🌱 Growth Mindset", value: "Growth Mindset" },
 ];
 
@@ -61,6 +66,8 @@ const TOPICS = [
 
 export const JournalEditor: React.FC<JournalEditorProps> = ({
   user,
+  isGuest = false,
+  onRequireAuth,
   entry,
   onUpdateEntry,
   onSendMessage,
@@ -70,6 +77,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   saveStatus,
   onRetrySave,
   errorMessage,
+  guestConversationIndex = 1,
+  maxGuestConversations = 2,
 }) => {
   const [inputText, setInputText] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -99,6 +108,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   // Voice Dictation hook
   const voice = useVoiceDictation({
     onTranscriptChange: (newChunk, isFinal) => {
+      if (isGuest) return;
       setInputText((prev) => {
         const trimmed = prev.trim();
         if (!trimmed) return newChunk.trim();
@@ -106,7 +116,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       });
     },
     onVoiceCommandSend: () => {
-      // Hands-free voice trigger: send reflection
+      if (isGuest) return;
       setInputText((currentText) => {
         if (currentText.trim()) {
           onSendMessage(currentText.trim());
@@ -116,6 +126,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       });
     },
     onVoiceCommandSummary: () => {
+      if (isGuest) {
+        onRequireAuth?.(
+          "Unlock Growth Summaries",
+          "Reflection summaries and action plans require an account. Sign in to synthesize takeaways."
+        );
+        return;
+      }
       onGenerateSummary();
     },
     onVoiceCommandClear: () => {
@@ -134,6 +151,37 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     }
   };
 
+  const handleSummaryButtonClick = () => {
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock AI Growth Summaries",
+        "Reflection summaries, emotional tone analysis, and mindful action plans require an account. Sign in to synthesize your takeaways."
+      );
+      return;
+    }
+    onGenerateSummary();
+  };
+
+  const handleQuickMicClick = () => {
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock Voice Dictation",
+        "Hands-free voice transcription, Gemini audio dictation, and speech commands require an account. Sign in to enable."
+      );
+      return;
+    }
+    if (voice.isListening || voice.isRecordingAudio) {
+      voice.stopListening();
+      voice.stopAudioRecording();
+    } else {
+      if (voice.voiceMode === "audio-record") {
+        voice.startAudioRecording();
+      } else {
+        voice.startListening();
+      }
+    }
+  };
+
   const handleCopyMessage = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -142,6 +190,45 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
   return (
     <div id="journal-editor-container" className="max-w-4xl mx-auto space-y-6 pb-16">
+      {/* Guest Mode Notice Banner */}
+      {isGuest && (
+        <div
+          id="guest-conversation-banner"
+          className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200/90 text-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="p-1.5 rounded-xl bg-amber-100 border border-amber-200 text-amber-800 shrink-0 mt-0.5">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-900">
+                  Guest Conversation Mode ({guestConversationIndex} of {maxGuestConversations} conversations)
+                </span>
+                <span className="text-[10px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.2 rounded-full border border-amber-300">
+                  Conversation Only
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                You can converse freely with Gemini in up to {maxGuestConversations} conversations. Advanced features (Summaries, Voice dictation, Cloud backup) require an account.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="btn-guest-banner-sign-in"
+            onClick={() => onRequireAuth?.(
+              "Sign In to Unlock All Features",
+              "Create a free account to unlock unlimited conversations, AI growth summaries, voice dictation, and persistent cloud sync."
+            )}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-xs"
+          >
+            Sign In with Account
+          </button>
+        </div>
+      )}
+
       {/* Top Header & Metadata Controls */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
         {/* Title & Date */}
@@ -206,14 +293,23 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           {entry.messages.length >= 2 && (
             <button
               id="btn-generate-summary"
-              onClick={onGenerateSummary}
+              onClick={handleSummaryButtonClick}
               disabled={isGeneratingSummary}
-              className="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 font-semibold text-xs flex items-center gap-1.5 border border-indigo-200/80 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+              className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 border transition-all disabled:opacity-50 cursor-pointer shadow-xs ${
+                isGuest
+                  ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                  : "bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 border-indigo-200/80"
+              }`}
             >
               {isGeneratingSummary ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
                   <span>Synthesizing Reflection...</span>
+                </>
+              ) : isGuest ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Generate Growth Summary (Account Req.)</span>
                 </>
               ) : (
                 <>
@@ -230,7 +326,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       {entry.summary && (
         <SummaryCard
           summary={entry.summary}
-          onRefresh={onGenerateSummary}
+          onRefresh={handleSummaryButtonClick}
           isGenerating={isGeneratingSummary}
         />
       )}
@@ -378,6 +474,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
       {/* Voice Control & Hands-Free Input Panel */}
       <VoiceControlPanel
+        isGuest={isGuest}
+        onRequireAuth={onRequireAuth}
         isListening={voice.isListening}
         isRecordingAudio={voice.isRecordingAudio}
         isTranscribing={voice.isTranscribing}
@@ -398,7 +496,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           }
         }}
         onManualTriggerSummary={() => {
-          onGenerateSummary();
+          handleSummaryButtonClick();
         }}
       />
 
@@ -418,8 +516,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={
               entry.messages.length === 0
-                ? "Write your thoughts, speak into the mic above, or choose a prompt starter..."
-                : "Continue your reflection, speak naturally hands-free, or ask Gemini..."
+                ? "Write your thoughts or choose a prompt starter to reflect with Gemini..."
+                : "Continue your conversation with Gemini..."
             }
             className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 placeholder:text-slate-400 focus:ring-0 leading-relaxed max-h-48"
           />
@@ -427,7 +525,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
         <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
           <div className="text-slate-400 hidden sm:block font-medium">
-            Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> or say <strong className="text-indigo-600 font-semibold">"Reflect"</strong> to send hands-free
+            Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono text-[10px] text-slate-600">Cmd + Enter</kbd> to send reflection
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
@@ -435,26 +533,22 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             <button
               id="btn-composer-quick-mic"
               type="button"
-              onClick={() => {
-                if (voice.isListening || voice.isRecordingAudio) {
-                  voice.stopListening();
-                  voice.stopAudioRecording();
-                } else {
-                  if (voice.voiceMode === "audio-record") {
-                    voice.startAudioRecording();
-                  } else {
-                    voice.startListening();
-                  }
-                }
-              }}
-              title={voice.isListening ? "Stop listening" : "Start hands-free voice input"}
+              onClick={handleQuickMicClick}
+              title={isGuest ? "Sign in to enable voice" : voice.isListening ? "Stop listening" : "Start hands-free voice input"}
               className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
-                voice.isListening || voice.isRecordingAudio
+                isGuest
+                  ? "bg-slate-100 hover:bg-slate-200/80 text-slate-500 border-slate-200"
+                  : voice.isListening || voice.isRecordingAudio
                   ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse"
                   : "bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200"
               }`}
             >
-              {voice.isListening || voice.isRecordingAudio ? (
+              {isGuest ? (
+                <>
+                  <Mic className="w-3.5 h-3.5 text-slate-400" />
+                  <Lock className="w-3 h-3 text-amber-600" />
+                </>
+              ) : voice.isListening || voice.isRecordingAudio ? (
                 <>
                   <Mic className="w-3.5 h-3.5" />
                   <span className="text-xs font-semibold hidden md:inline">Listening...</span>
@@ -503,3 +597,4 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     </div>
   );
 };
+

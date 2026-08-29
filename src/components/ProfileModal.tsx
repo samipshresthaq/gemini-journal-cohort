@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AuthUser, JournalEntry } from "../types";
 import { 
   User as UserIcon, 
@@ -28,6 +28,7 @@ interface ProfileModalProps {
   entries: JournalEntry[];
   onSignOut: () => void;
   onProfileUpdated: (updatedUser: AuthUser) => void;
+  onRequireAuth?: (title?: string, description?: string) => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -37,12 +38,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   entries,
   onSignOut,
   onProfileUpdated,
+  onRequireAuth,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState(user.displayName || "");
   const [isSavingName, setIsSavingName] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -106,7 +118,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   return (
     <div
       id="profile-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
@@ -227,6 +239,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </p>
             )}
           </div>
+
+          {/* Guest Upgrade Callout */}
+          {isGuest && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span className="text-xs font-bold text-slate-900">Upgrade to an Account</span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-200 text-amber-900 rounded-full">
+                  {entries.length}/2 Conversations
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                You are currently in a limited guest session (max 2 conversations, conversation-only). Sign in to unlock unlimited reflections, AI growth summaries, hands-free voice transcription, and cloud backups.
+              </p>
+              <button
+                type="button"
+                id="btn-profile-guest-upgrade"
+                onClick={() => {
+                  onClose();
+                  onRequireAuth?.(
+                    "Sign In to Upgrade Account",
+                    "Convert your guest session to a free permanent account to keep your reflections safely backed up and unlock all AI features."
+                  );
+                }}
+                className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Sign In with Google or Email</span>
+              </button>
+            </div>
+          )}
 
           {/* Account Details & Security Information */}
           <div className="space-y-3">

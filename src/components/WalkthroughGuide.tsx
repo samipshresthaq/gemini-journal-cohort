@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   CheckCircle2, 
   Circle, 
@@ -29,16 +29,39 @@ const TEST_CASES: TestCase[] = [
   {
     id: "TC-01",
     category: "Authentication & Identity",
-    title: "Google Sign-In with Firebase Auth",
+    title: "Google & Email Authentication",
     steps: [
-      "Navigate to the landing page.",
-      "Click the 'Continue with Google' button.",
-      "Complete the Google OAuth popup sign-in flow.",
+      "On the landing page, view the unified sign-in container.",
+      "Test 'Continue with Google' or toggle between 'Log In' and 'Create Account' using Email & Password.",
+      "Complete sign in and notice immediate profile hydration in the navbar.",
     ],
-    expected: "User profile loads with photo and name in Navbar; redirected to private dashboard.",
+    expected: "User profile loads with email/photo in Navbar; redirected to private dashboard.",
   },
   {
     id: "TC-02",
+    category: "Guest Experience",
+    title: "Guest Session: Conversation, Mood & Focus Selection (2 Max Limit)",
+    steps: [
+      "On the landing page, click 'Continue as Guest' in the dedicated guest container.",
+      "Freely select your current Mood (e.g. Grateful, Inspired) and Focus area (e.g. Mindfulness, Gratitude).",
+      "Engage in conversational reflections with Gemini (up to 2 conversations maximum).",
+      "Notice gated actions (AI Summary, Voice Transcription, Favorites, Markdown Export) open the login popup on the same page with a transparent blurred backdrop overlay.",
+    ],
+    expected: "Guest can reflect, set mood, and choose focus area freely; gated features trigger the in-page blurred login popup.",
+  },
+  {
+    id: "TC-03",
+    category: "User Profile",
+    title: "User Profile Modal & Session Stats",
+    steps: [
+      "Click the user avatar in the navbar to open the User Profile.",
+      "Review account identifier (UID), verification badge, total reflections, AI exchanges, and mood distribution.",
+      "Edit and save your display name.",
+    ],
+    expected: "Profile modal displays live metrics and allows updating user display name.",
+  },
+  {
+    id: "TC-04",
     category: "Journaling & Prompts",
     title: "Reflection Starter & Metadata Selection",
     steps: [
@@ -49,7 +72,7 @@ const TEST_CASES: TestCase[] = [
     expected: "Prompt text area and metadata tags update instantly without lag.",
   },
   {
-    id: "TC-03",
+    id: "TC-05",
     category: "AI Engine",
     title: "Multi-Turn Gemini 3.6 Flash Conversation",
     steps: [
@@ -60,18 +83,18 @@ const TEST_CASES: TestCase[] = [
     expected: "Gemini returns empathetic, structured markdown reflection and deepens conversation.",
   },
   {
-    id: "TC-04",
+    id: "TC-06",
     category: "Synthesis & Action Plans",
     title: "Automated Growth Synthesis & Action Items",
     steps: [
-      "After at least 2 messages, click 'Generate Growth Summary'.",
+      "After at least 2 messages, click 'Generate Growth Summary' (requires signed-in account).",
       "Observe the structured dark theme Synthesis Card appearance.",
       "Toggle check marks on the mindful action items.",
     ],
     expected: "Structured JSON response displays Executive Overview, Key Takeaways, Growth Insights, and interactive Action Items.",
   },
   {
-    id: "TC-05",
+    id: "TC-07",
     category: "Database & Security",
     title: "Firestore Zero-Trust Isolation & Persistence",
     steps: [
@@ -82,7 +105,7 @@ const TEST_CASES: TestCase[] = [
     expected: "All messages, titles, moods, and summaries persist across reloads without loss.",
   },
   {
-    id: "TC-06",
+    id: "TC-08",
     category: "History & Management",
     title: "Search, Filter, Export & Delete",
     steps: [
@@ -94,28 +117,15 @@ const TEST_CASES: TestCase[] = [
     expected: "Realtime filtered list reacts instantly; export saves file; deletion updates list in realtime.",
   },
   {
-    id: "TC-07",
+    id: "TC-09",
     category: "Voice Control & Dictation",
-    title: "Hands-Free Live Speech-to-Text Input",
+    title: "Hands-Free Live Speech-to-Text & Gemini HD Audio",
     steps: [
-      "Click the Microphone icon on the Voice Control Panel or the composer toolbar.",
-      "Allow microphone access in the browser when prompted.",
-      "Speak a thought or reflection out loud into your microphone.",
+      "Click the Microphone icon on the Voice Control Panel (signed-in accounts).",
+      "Speak a thought or reflection into your microphone.",
       "Observe the dynamic audio waveform equalizer and live streaming speech preview.",
     ],
     expected: "Spoken speech is accurately transcribed in realtime and appended to the reflection prompt textarea.",
-  },
-  {
-    id: "TC-08",
-    category: "Voice Control & Dictation",
-    title: "Hands-Free Spoken Voice Commands & Gemini HD Audio",
-    steps: [
-      "With Voice listening active, speak the command 'Reflect' or 'Send reflection'.",
-      "Notice the reflection is automatically submitted to Gemini hands-free.",
-      "Switch to 'Gemini HD Audio' mode, record a spoken snippet, and click stop.",
-      "Observe Gemini 3.6 Flash multimodal transcription transcribing with punctuation and nuance.",
-    ],
-    expected: "Hands-free commands trigger actions directly; Gemini audio transcription parses audio verbatim.",
   },
 ];
 
@@ -124,6 +134,16 @@ export const WalkthroughGuide: React.FC<WalkthroughGuideProps> = ({
   onClose,
 }) => {
   const [completedTests, setCompletedTests] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

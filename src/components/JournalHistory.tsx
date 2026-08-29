@@ -5,18 +5,19 @@ import {
   Search, 
   Star, 
   Trash2, 
-  Calendar, 
   MessageSquare, 
   Sparkles, 
   X, 
   FileDown, 
-  Check, 
-  Filter 
+  Lock
 } from "lucide-react";
 
 interface JournalHistoryProps {
   entries: JournalEntry[];
   activeEntryId: string | null;
+  isGuest?: boolean;
+  maxGuestEntries?: number;
+  onRequireAuth?: (title?: string, description?: string) => void;
   onSelectEntry: (entry: JournalEntry) => void;
   onDeleteEntry: (entryId: string) => Promise<void>;
   onToggleFavorite: (entryId: string, isFav: boolean) => Promise<void>;
@@ -26,6 +27,9 @@ interface JournalHistoryProps {
 export const JournalHistory: React.FC<JournalHistoryProps> = ({
   entries,
   activeEntryId,
+  isGuest = false,
+  maxGuestEntries = 2,
+  onRequireAuth,
   onSelectEntry,
   onDeleteEntry,
   onToggleFavorite,
@@ -64,6 +68,13 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
   const handleExportMarkdown = (entry: JournalEntry, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock Markdown Export",
+        "Exporting reflections to Markdown documents requires an account. Sign in to download your sessions."
+      );
+      return;
+    }
     let content = `# ${entry.title}\n\n`;
     content += `*Date:* ${new Date(entry.createdAt).toLocaleString()}\n`;
     if (entry.mood) content += `*Mood:* ${entry.mood}\n`;
@@ -101,6 +112,18 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleFavoriteClick = (entry: JournalEntry, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock Favorites & Collections",
+        "Starring favorites and organizing reflections into collections require an account. Sign in to save favorites."
+      );
+      return;
+    }
+    onToggleFavorite(entry.id, !entry.isFavorite);
+  };
+
   const confirmDelete = async (entryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm("Are you sure you want to delete this reflection? This action cannot be undone.")) {
@@ -125,9 +148,11 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
               <History className="w-4 h-4" />
             </div>
-            <h2 className="font-extrabold text-slate-900 text-lg">Reflection History</h2>
+            <h2 className="font-extrabold text-slate-900 text-lg">
+              {isGuest ? "Guest Conversations" : "Reflection History"}
+            </h2>
             <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-semibold border border-slate-200">
-              {entries.length} {entries.length === 1 ? "entry" : "entries"}
+              {entries.length}{isGuest ? `/${maxGuestEntries}` : ""} {entries.length === 1 ? "entry" : "entries"}
             </span>
           </div>
           <button
@@ -138,6 +163,25 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Guest info banner */}
+        {isGuest && (
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-slate-700 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>Guest session: Max {maxGuestEntries} conversations allowed.</span>
+            </div>
+            <button
+              onClick={() => onRequireAuth?.(
+                "Sign In for Unlimited History",
+                "Sign in with Google or Email to unlock unlimited history, search filtering, markdown export, and cloud backups."
+              )}
+              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline shrink-0 cursor-pointer"
+            >
+              Sign In
+            </button>
+          </div>
+        )}
 
         {/* Search input */}
         <div className="relative">
@@ -180,7 +224,16 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
           <button
             id="btn-filter-favorites"
-            onClick={() => setOnlyFavorites(!onlyFavorites)}
+            onClick={() => {
+              if (isGuest) {
+                onRequireAuth?.(
+                  "Unlock Favorites Filter",
+                  "Favoriting and filtering saved reflections requires an account. Sign in to unlock."
+                );
+                return;
+              }
+              setOnlyFavorites(!onlyFavorites);
+            }}
             className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               onlyFavorites
                 ? "bg-amber-50 text-amber-900 border-amber-300"
@@ -233,10 +286,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       id={`btn-fav-entry-${entry.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleFavorite(entry.id, !entry.isFavorite);
-                      }}
+                      onClick={(e) => handleFavoriteClick(entry, e)}
                       title={entry.isFavorite ? "Remove favorite" : "Mark as favorite"}
                       className="p-1 text-slate-400 hover:text-amber-500 transition-colors"
                     >
@@ -333,7 +383,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
       {/* Footer Info */}
       <div className="p-4 border-t border-slate-100 bg-slate-50/80 text-xs text-slate-500 text-center font-medium">
-        Data is isolated to your UID in Cloud Firestore
+        {isGuest ? "Guest data stored locally • Sign in for cloud backup" : "Data is isolated to your UID in Cloud Firestore"}
       </div>
     </div>
   );

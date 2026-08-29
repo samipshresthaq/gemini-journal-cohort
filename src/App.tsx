@@ -21,9 +21,11 @@ import { JournalEditor } from "./components/JournalEditor";
 import { JournalHistory } from "./components/JournalHistory";
 import { WalkthroughGuide } from "./components/WalkthroughGuide";
 import { ProfileModal } from "./components/ProfileModal";
+import { AuthModal } from "./components/AuthModal";
 import { Loader2 } from "lucide-react";
 
 const GUEST_SESSION_KEY = "gemini_journal_active_guest";
+const MAX_GUEST_CONVERSATIONS = 2;
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -36,10 +38,21 @@ export default function App() {
   const [isWalkthroughOpen, setIsWalkthroughOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // Auth modal state for gating features
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalConfig, setAuthModalConfig] = useState<{ title?: string; description?: string }>({});
+
   const [isGeneratingReply, setIsGeneratingReply] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isGuest = !!user?.uid.startsWith("guest_");
+
+  const triggerAuthModal = useCallback((title?: string, description?: string) => {
+    setAuthModalConfig({ title, description });
+    setIsAuthModalOpen(true);
+  }, []);
 
   const activeEntryRef = useRef<JournalEntry | null>(null);
   activeEntryRef.current = activeEntry;
@@ -135,16 +148,30 @@ export default function App() {
     try {
       await signInWithGoogle();
     } catch (err: any) {
+      if (
+        err?.code === "auth/popup-closed-by-user" || 
+        err?.code === "auth/cancelled-popup-request"
+      ) {
+        // User voluntarily dismissed popup, no error state required
+        setAuthLoading(false);
+        return;
+      }
+
       console.error("Sign-in failed:", err);
-      const isNetworkOrPopupError = 
-        err?.code === "auth/popup-blocked" || 
-        err?.code === "auth/network-request-failed" ||
-        err?.code === "auth/cancelled-popup-request";
-      setAuthError(
-        isNetworkOrPopupError
-          ? "Google Sign-In popup could not complete. If you are in an embedded preview, use Email & Password, click 'Continue as Guest', or open the app in a new tab."
-          : err?.message || "Google Sign-In encountered an issue."
-      );
+      const isPopupBlocked = err?.code === "auth/popup-blocked";
+      const isNetworkError = err?.code === "auth/network-request-failed";
+
+      if (isPopupBlocked) {
+        setAuthError(
+          "The Google Sign-In popup was blocked by your browser. Please allow popups or use Email & Password."
+        );
+      } else if (isNetworkError) {
+        setAuthError(
+          "Network connection issue during sign-in. Please check your internet connection and retry."
+        );
+      } else {
+        setAuthError(err?.message || "Google Sign-In encountered an issue. Please try again or use Email & Password.");
+      }
       setAuthLoading(false);
     }
   };
@@ -237,6 +264,13 @@ export default function App() {
   // Switch to a new empty reflection
   const handleNewEntry = () => {
     if (!user) return;
+    if (isGuest && entries.length >= MAX_GUEST_CONVERSATIONS) {
+      triggerAuthModal(
+        "Guest Limit Reached (2 of 2 Conversations)",
+        "Guest mode allows a maximum of 2 active conversations. Sign in with Google or Email to unlock unlimited reflections, history sync, and AI growth summaries."
+      );
+      return;
+    }
     const fresh = createNewEmptyEntry(user.uid);
     setActiveEntry(fresh);
     setIsHistoryOpen(false);
@@ -340,6 +374,13 @@ export default function App() {
   // Generate deep summary & action items
   const handleGenerateSummary = async () => {
     if (!user || !activeEntry || activeEntry.messages.length === 0) return;
+    if (isGuest) {
+      triggerAuthModal(
+        "Unlock AI Growth Summaries",
+        "Reflection summaries, emotional analysis, and action plans require an account. Sign in to synthesize your takeaways."
+      );
+      return;
+    }
 
     setIsGeneratingSummary(true);
     setErrorMessage(null);
@@ -399,6 +440,13 @@ export default function App() {
   // Toggle Favorite
   const handleToggleFavorite = async (entryId: string, isFav: boolean) => {
     if (!user) return;
+    if (isGuest) {
+      triggerAuthModal(
+        "Unlock Favorites",
+        "Starring and saving favorite reflections requires an account. Sign in to unlock."
+      );
+      return;
+    }
     try {
       await toggleEntryFavorite(user.uid, entryId, isFav);
       if (activeEntry?.id === entryId) {
@@ -421,11 +469,18 @@ export default function App() {
     );
   }
 
+  const currentGuestIndex = entries.findIndex((e) => e.id === activeEntry?.id);
+  const activeGuestConversationIndex = currentGuestIndex >= 0 ? currentGuestIndex + 1 : Math.min(entries.length + 1, MAX_GUEST_CONVERSATIONS);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
       {/* Top Navigation */}
       <Navbar
         user={user}
+        isGuest={isGuest}
+        guestEntryCount={entries.length}
+        maxGuestEntries={MAX_GUEST_CONVERSATIONS}
+        onOpenAuthModal={triggerAuthModal}
         onSignOut={handleSignOut}
         onNewEntry={handleNewEntry}
         onToggleHistory={() => setIsHistoryOpen((prev) => !prev)}
@@ -445,12 +500,15 @@ export default function App() {
             onEmailSignIn={handleEmailSignIn}
             onEmailSignUp={handleEmailSignUp}
             onGuestSignIn={handleGuestSignIn}
+            onOpenAuthModal={triggerAuthModal}
             isLoading={authLoading}
             errorMessage={authError}
           />
         ) : activeEntry ? (
           <JournalEditor
             user={user}
+            isGuest={isGuest}
+            onRequireAuth={triggerAuthModal}
             entry={activeEntry}
             onUpdateEntry={handleUpdateEntry}
             onSendMessage={handleSendMessage}
@@ -460,6 +518,8 @@ export default function App() {
             saveStatus={saveStatus}
             onRetrySave={() => persistEntry(activeEntry)}
             errorMessage={errorMessage}
+            guestConversationIndex={activeGuestConversationIndex}
+            maxGuestConversations={MAX_GUEST_CONVERSATIONS}
           />
         ) : (
           <div className="text-center py-24 space-y-4">
@@ -479,6 +539,9 @@ export default function App() {
         <JournalHistory
           entries={entries}
           activeEntryId={activeEntry?.id || null}
+          isGuest={isGuest}
+          maxGuestEntries={MAX_GUEST_CONVERSATIONS}
+          onRequireAuth={triggerAuthModal}
           onSelectEntry={(entry) => setActiveEntry(entry)}
           onDeleteEntry={handleDeleteEntry}
           onToggleFavorite={handleToggleFavorite}
@@ -495,8 +558,20 @@ export default function App() {
           entries={entries}
           onSignOut={handleSignOut}
           onProfileUpdated={(updated) => setUser(updated)}
+          onRequireAuth={triggerAuthModal}
         />
       )}
+
+      {/* Auth Upgrade Modal for Guest Feature Gating */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSignInWithGoogle={handleSignIn}
+        onSignInWithEmail={handleEmailSignIn}
+        onSignUpWithEmail={handleEmailSignUp}
+        title={authModalConfig.title}
+        description={authModalConfig.description}
+      />
 
       {/* Verification Walkthrough Modal */}
       <WalkthroughGuide

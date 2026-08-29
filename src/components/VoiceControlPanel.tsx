@@ -1,25 +1,23 @@
 import React, { useState } from "react";
 import { 
   Mic, 
-  MicOff, 
   Radio, 
   Sparkles, 
   Volume2, 
-  Info, 
   CheckCircle2, 
   AlertCircle, 
   Loader2, 
   AudioWaveform, 
-  Send,
-  RefreshCw,
-  Square,
   HelpCircle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Lock
 } from "lucide-react";
 import { VoiceMode } from "../types";
 
 interface VoiceControlPanelProps {
+  isGuest?: boolean;
+  onRequireAuth?: (title?: string, description?: string) => void;
   isListening: boolean;
   isRecordingAudio: boolean;
   isTranscribing: boolean;
@@ -39,6 +37,8 @@ interface VoiceControlPanelProps {
 }
 
 export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
+  isGuest = false,
+  onRequireAuth,
   isListening,
   isRecordingAudio,
   isTranscribing,
@@ -60,15 +60,72 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
 
   const isActive = isListening || isRecordingAudio;
 
+  const handleMicClick = () => {
+    if (isGuest) {
+      if (onRequireAuth) {
+        onRequireAuth(
+          "Unlock Voice Dictation & Controls",
+          "Voice transcription, Gemini audio dictation, and hands-free voice commands require an account. Sign in to enable."
+        );
+      }
+      return;
+    }
+    if (isActive) {
+      if (isListening) onStopListening();
+      if (isRecordingAudio) onStopAudioRecording();
+    } else {
+      if (voiceMode === "audio-record") {
+        onStartAudioRecording();
+      } else {
+        onStartListening();
+      }
+    }
+  };
+
+  const handleModeSwitch = (mode: VoiceMode) => {
+    if (isGuest) {
+      if (onRequireAuth) {
+        onRequireAuth(
+          "Unlock Voice Modes",
+          "Audio recording and speech modes require an account. Sign in to unlock."
+        );
+      }
+      return;
+    }
+    onSetVoiceMode(mode);
+  };
+
   return (
     <div
       id="voice-control-panel"
       className={`rounded-2xl border transition-all duration-300 ${
-        isActive
+        isGuest
+          ? "bg-slate-100/80 text-slate-700 border-slate-200/90"
+          : isActive
           ? "bg-slate-900 text-white border-indigo-500/60 shadow-lg ring-1 ring-indigo-500/30"
           : "bg-slate-50/80 text-slate-800 border-slate-200/90"
-      } p-4 space-y-3`}
+      } p-4 space-y-3 relative`}
     >
+      {/* Guest Lock Indicator Banner if guest */}
+      {isGuest && (
+        <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-slate-200/70 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
+            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Voice Controls & Dictation (Account Required)</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onRequireAuth?.(
+              "Unlock Voice Dictation & Controls",
+              "Voice transcription, Gemini audio dictation, and hands-free voice commands require an account."
+            )}
+            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline cursor-pointer"
+          >
+            Sign In to Unlock
+          </button>
+        </div>
+      )}
+
       {/* Top Bar: Status, Mode Switcher, & Main Mic Button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Left: Status & Audio Waveform */}
@@ -76,28 +133,24 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
           <button
             id="btn-toggle-voice-dictation"
             type="button"
-            onClick={() => {
-              if (isActive) {
-                if (isListening) onStopListening();
-                if (isRecordingAudio) onStopAudioRecording();
-              } else {
-                if (voiceMode === "audio-record") {
-                  onStartAudioRecording();
-                } else {
-                  onStartListening();
-                }
-              }
-            }}
+            onClick={handleMicClick}
             disabled={isTranscribing}
             className={`relative p-3 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-sm ${
-              isActive
+              isGuest
+                ? "bg-white hover:bg-amber-50 text-slate-500 border border-slate-300"
+                : isActive
                 ? "bg-indigo-600 hover:bg-indigo-500 text-white ring-4 ring-indigo-500/30 scale-105"
                 : "bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 hover:border-slate-300"
             }`}
-            title={isActive ? "Stop voice listening" : "Start hands-free voice input"}
+            title={isGuest ? "Sign in to enable voice" : isActive ? "Stop voice listening" : "Start hands-free voice input"}
           >
             {isTranscribing ? (
               <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+            ) : isGuest ? (
+              <div className="relative">
+                <Mic className="w-5 h-5 text-slate-400" />
+                <Lock className="w-2.5 h-2.5 text-amber-600 absolute -bottom-1 -right-1" />
+              </div>
             ) : isActive ? (
               <>
                 <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -114,21 +167,25 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold tracking-tight">
-                {isTranscribing
+                {isGuest
+                  ? "Voice Dictation & Hands-Free Control"
+                  : isTranscribing
                   ? "Transcribing with Gemini 3.6 Flash..."
                   : isActive
                   ? "Hands-Free Voice Listening"
                   : "Voice Input & Hands-Free Control"}
               </span>
-              {isActive && (
+              {isActive && !isGuest && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-400/30">
                   <Radio className="w-2.5 h-2.5 animate-pulse text-indigo-400" />
                   Live Mic
                 </span>
               )}
             </div>
-            <p className={`text-xs ${isActive ? "text-slate-400" : "text-slate-500"}`}>
-              {isActive
+            <p className={`text-xs ${isActive && !isGuest ? "text-slate-400" : "text-slate-500"}`}>
+              {isGuest
+                ? "Guest accounts are limited to conversation mode. Sign in to speak or dictate."
+                : isActive
                 ? "Speak freely. Say 'Reflect' to send, 'New paragraph' for line breaks."
                 : "Click microphone to dictate or speak hands-free commands."}
             </p>
@@ -141,7 +198,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
           <div className="flex items-center bg-black/10 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/50 text-xs">
             <button
               type="button"
-              onClick={() => onSetVoiceMode("handsfree")}
+              onClick={() => handleModeSwitch("handsfree")}
               className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                 voiceMode === "handsfree"
                   ? "bg-white text-slate-900 shadow-xs"
@@ -152,7 +209,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onSetVoiceMode("audio-record")}
+              onClick={() => handleModeSwitch("audio-record")}
               className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 ${
                 voiceMode === "audio-record"
                   ? "bg-white text-slate-900 shadow-xs"
@@ -169,7 +226,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             id="btn-toggle-voice-commands-help"
             onClick={() => setShowCheatsheet(!showCheatsheet)}
             className={`p-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1 cursor-pointer ${
-              isActive
+              isActive && !isGuest
                 ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
                 : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
             }`}
@@ -183,13 +240,12 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
       </div>
 
       {/* Active Audio Waveform Meter */}
-      {isActive && (
+      {isActive && !isGuest && (
         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-4">
           <div className="flex items-center gap-1.5 flex-1">
             <Volume2 className="w-4 h-4 text-indigo-400 shrink-0" />
             <div className="flex items-center gap-0.5 h-6 flex-1 max-w-xs">
               {[...Array(24)].map((_, i) => {
-                // Calculate dynamic height based on volume and index
                 const barHeight = Math.max(
                   15,
                   Math.min(100, (audioVolume * 1.5 * ((i % 5) + 1)) / 5)
@@ -211,7 +267,6 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             </span>
           </div>
 
-          {/* Last command toast notification */}
           {lastCommand && (
             <div className="flex items-center gap-1.5 text-xs bg-indigo-950 text-indigo-300 px-3 py-1 rounded-full border border-indigo-700/60 animate-fade-in">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -222,7 +277,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
       )}
 
       {/* Real-time Interim Streaming Transcript Preview */}
-      {interimTranscript && (
+      {interimTranscript && !isGuest && (
         <div
           id="voice-interim-transcript-box"
           className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-indigo-200 italic flex items-center gap-2 animate-pulse"
@@ -233,7 +288,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
       )}
 
       {/* Error / Warning Alert */}
-      {error && (
+      {error && !isGuest && (
         <div
           id="voice-error-banner"
           className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2"
@@ -257,7 +312,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
         <div
           id="voice-commands-cheatsheet"
           className={`p-4 rounded-xl border space-y-2.5 text-xs transition-all ${
-            isActive
+            isActive && !isGuest
               ? "bg-slate-800/80 border-slate-700/80 text-slate-300"
               : "bg-white border-slate-200 text-slate-700 shadow-xs"
           }`}
@@ -266,7 +321,9 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             <span className="font-bold text-xs uppercase tracking-wider text-indigo-400">
               🗣️ Hands-Free Voice Commands
             </span>
-            <span className="text-[11px] text-slate-400">Speak naturally at any time</span>
+            <span className="text-[11px] text-slate-400">
+              {isGuest ? "Account required" : "Speak naturally at any time"}
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
