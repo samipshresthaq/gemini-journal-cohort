@@ -108,19 +108,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   return (
     <div
       id="auth-upgrade-modal-backdrop"
-      className="fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto transition-all duration-300"
+      className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto transition-all duration-300"
       onClick={onClose}
     >
       <div
         id="auth-upgrade-modal-card"
-        className="bg-white/95 backdrop-blur-xl rounded-3xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-5 text-left relative animate-in fade-in zoom-in-95 duration-200 my-8 ring-1 ring-black/5"
+        className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-5 text-left relative animate-in fade-in zoom-in-95 duration-200 my-8 ring-1 ring-black/5 dark:ring-white/5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           id="btn-close-auth-modal"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -128,17 +128,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Modal Header */}
         <div className="space-y-2 pr-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <LockIcon className="w-4 h-4" />
             </div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50/80 px-2 py-0.5 rounded-full border border-indigo-100">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800">
               Account Required
             </span>
           </div>
-          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+          <h3 className="text-xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight">
             {title}
           </h3>
-          <p className="text-xs text-slate-600 leading-relaxed">
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             {description}
           </p>
         </div>
@@ -150,7 +150,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             id="btn-modal-google-sign-in"
             onClick={handleGoogleClick}
             disabled={isLoadingGoogle || isSubmittingEmail}
-            className="w-full h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-70 cursor-pointer"
+            className="w-full h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-semibold text-xs border border-transparent dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-70 cursor-pointer"
           >
             {isLoadingGoogle ? (
               <>
@@ -185,19 +185,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Divider */}
           <div className="relative flex py-0.5 items-center">
-            <div className="grow border-t border-slate-200"></div>
-            <span className="shrink mx-3 text-slate-400 text-[11px] font-medium uppercase tracking-wider">
+            <div className="grow border-t border-slate-200 dark:border-slate-800"></div>
+            <span className="shrink mx-3 text-slate-400 dark:text-slate-500 text-[11px] font-medium uppercase tracking-wider">
               or with email
             </span>
-            <div className="grow border-t border-slate-200"></div>
+            <div className="grow border-t border-slate-200 dark:border-slate-800"></div>
           </div>
 
           {/* Email & Password Form */}
           <form onSubmit={handleEmailSubmit} className="space-y-3">
             {isRegistering && (
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Name <span className="text-slate-400 font-normal">(Optional)</span>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Full Name <span className="text-slate-400 dark:text-slate-500 font-normal">(Optional)</span>
                 </label>
                 <div className="relative">
                   <UserIcon className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -207,14 +207,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Alex Parker"
-                    className="w-full h-9 pl-8 pr-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="w-full h-9 pl-8 pr-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Email Address
               </label>
               <div className="relative">
@@ -226,13 +226,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full h-9 pl-8 pr-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="w-full h-9 pl-8 pr-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Password
               </label>
               <div className="relative">
@@ -245,7 +245,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters"
-                  className="w-full h-9 pl-8 pr-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="w-full h-9 pl-8 pr-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -254,7 +254,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               type="submit"
               id="btn-modal-submit-email"
               disabled={isSubmittingEmail || isLoadingGoogle}
-              className="w-full h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 cursor-pointer mt-1"
+              className="w-full h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 cursor-pointer mt-1"
             >
               {isSubmittingEmail ? (
                 <>
@@ -270,7 +270,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
 
             {/* Toggle sign in / register */}
-            <div className="pt-1 text-center text-xs text-slate-500">
+            <div className="pt-1 text-center text-xs text-slate-500 dark:text-slate-400">
               {isRegistering ? (
                 <p>
                   Already have an account?{" "}
@@ -281,7 +281,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setIsRegistering(false);
                       setAuthError(null);
                     }}
-                    className="text-indigo-600 hover:text-indigo-700 font-semibold underline cursor-pointer"
+                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold underline cursor-pointer"
                   >
                     Sign In
                   </button>
@@ -296,7 +296,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setIsRegistering(true);
                       setAuthError(null);
                     }}
-                    className="text-indigo-600 hover:text-indigo-700 font-semibold underline cursor-pointer"
+                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold underline cursor-pointer"
                   >
                     Create Account
                   </button>
@@ -307,33 +307,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Error Banner */}
           {authError && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
               <span>{authError}</span>
             </div>
           )}
         </div>
 
         {/* Benefits list */}
-        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs text-slate-600">
-          <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
+        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+          <span className="font-bold text-slate-800 dark:text-slate-200 block text-[11px] uppercase tracking-wider">
             With a Free Account:
           </span>
           <div className="grid grid-cols-2 gap-1.5 text-[11px]">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Unlimited conversations</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>AI Growth Summaries</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Hands-free Voice Input</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Cloud Firestore Backup</span>
             </div>
           </div>

@@ -60,8 +60,8 @@ export const PromptStarters: React.FC<PromptStartersProps> = ({ onSelectPrompt }
   return (
     <div id="prompt-starters-section" className="space-y-3">
       <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-indigo-600" />
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+        <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Reflection Starters
         </h3>
       </div>
@@ -71,17 +71,17 @@ export const PromptStarters: React.FC<PromptStartersProps> = ({ onSelectPrompt }
             key={idx}
             id={`prompt-starter-btn-${idx}`}
             onClick={() => onSelectPrompt(starter)}
-            className="group text-left p-4 rounded-2xl border border-slate-200/90 bg-white hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between gap-2.5 cursor-pointer shadow-xs"
+            className="group text-left p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all flex flex-col justify-between gap-2.5 cursor-pointer shadow-xs"
           >
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 shadow-xs group-hover:scale-105 group-hover:bg-indigo-50/50 transition-all">
+              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-xs group-hover:scale-105 group-hover:bg-indigo-50/50 dark:group-hover:bg-indigo-950/50 transition-all">
                 {getIcon(starter.iconName)}
               </div>
-              <span className="text-xs font-bold text-slate-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                 {starter.title}
               </span>
             </div>
-            <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
               "{starter.prompt}"
             </p>
           </button>

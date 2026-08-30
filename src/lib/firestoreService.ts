@@ -210,6 +210,60 @@ export async function toggleEntryFavorite(
 }
 
 /**
+ * Migrate local guest entries to Cloud Firestore when a user signs in or registers
+ */
+export async function migrateGuestEntriesToFirestore(
+  guestUserId: string,
+  authenticatedUserId: string
+): Promise<number> {
+  if (!guestUserId || !authenticatedUserId || guestUserId === authenticatedUserId) {
+    return 0;
+  }
+  if (!guestUserId.startsWith("guest_")) {
+    return 0;
+  }
+
+  const guestEntries = getGuestEntries(guestUserId);
+  if (!guestEntries || guestEntries.length === 0) {
+    return 0;
+  }
+
+  let migratedCount = 0;
+  for (const entry of guestEntries) {
+    try {
+      const entryRef = doc(db, "users", authenticatedUserId, "entries", entry.id);
+      const sanitized = sanitizeForFirestore({
+        ...entry,
+        userId: authenticatedUserId,
+        updatedAt: entry.updatedAt || Date.now(),
+      });
+      await setDoc(entryRef, sanitized, { merge: true });
+      migratedCount++;
+    } catch (err) {
+      console.error(`Failed to migrate guest entry ${entry.id} to Firestore:`, err);
+    }
+  }
+
+  // Clear migrated guest entries from localStorage
+  try {
+    localStorage.removeItem(`${GUEST_STORAGE_PREFIX}${guestUserId}`);
+  } catch (err) {
+    console.warn("Could not remove migrated guest entries from storage:", err);
+  }
+
+  // Record audit telemetry log for the migration
+  if (migratedCount > 0) {
+    await logUserInteraction(authenticatedUserId, {
+      entryId: "migration",
+      action: "migrate_guest_entries",
+      details: { guestUserId, count: migratedCount },
+    });
+  }
+
+  return migratedCount;
+}
+
+/**
  * Log individual interactions for audit and telemetry
  */
 export async function logUserInteraction(

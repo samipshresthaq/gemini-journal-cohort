@@ -99,17 +99,17 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
       id="voice-control-panel"
       className={`rounded-2xl border transition-all duration-300 ${
         isGuest
-          ? "bg-slate-100/80 text-slate-700 border-slate-200/90"
+          ? "bg-slate-100/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200/90 dark:border-slate-800"
           : isActive
-          ? "bg-slate-900 text-white border-indigo-500/60 shadow-lg ring-1 ring-indigo-500/30"
-          : "bg-slate-50/80 text-slate-800 border-slate-200/90"
+          ? "bg-slate-900 dark:bg-slate-950 text-white border-indigo-500/60 shadow-lg ring-1 ring-indigo-500/30"
+          : "bg-slate-50/80 dark:bg-slate-900/80 text-slate-800 dark:text-slate-200 border-slate-200/90 dark:border-slate-800"
       } p-4 space-y-3 relative`}
     >
       {/* Guest Lock Indicator Banner if guest */}
       {isGuest && (
-        <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-slate-200/70 text-xs">
-          <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
-            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+        <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-slate-200/70 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-semibold">
+            <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
             <span>Voice Controls & Dictation (Account Required)</span>
           </div>
           <button
@@ -118,7 +118,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
               "Unlock Voice Dictation & Controls",
               "Voice transcription, Gemini audio dictation, and hands-free voice commands require an account."
             )}
-            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline cursor-pointer"
+            className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 underline cursor-pointer"
           >
             Sign In to Unlock
           </button>
@@ -136,10 +136,10 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             disabled={isTranscribing}
             className={`relative p-3 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-sm ${
               isGuest
-                ? "bg-white hover:bg-amber-50 text-slate-500 border border-slate-300"
+                ? "bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
                 : isActive
                 ? "bg-indigo-600 hover:bg-indigo-500 text-white ring-4 ring-indigo-500/30 scale-105"
-                : "bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 hover:border-slate-300"
+                : "bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
             }`}
             title={isGuest ? "Sign in to enable voice" : isActive ? "Stop voice listening" : "Start hands-free voice input"}
           >
@@ -147,8 +147,8 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
               <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
             ) : isGuest ? (
               <div className="relative">
-                <Mic className="w-5 h-5 text-slate-400" />
-                <Lock className="w-2.5 h-2.5 text-amber-600 absolute -bottom-1 -right-1" />
+                <Mic className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                <Lock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 absolute -bottom-1 -right-1" />
               </div>
             ) : isActive ? (
               <>
@@ -159,13 +159,13 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
                 <Mic className="w-5 h-5 animate-pulse" />
               </>
             ) : (
-              <Mic className="w-5 h-5 text-slate-700" />
+              <Mic className="w-5 h-5 text-slate-700 dark:text-slate-300" />
             )}
           </button>
 
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold tracking-tight">
+              <span className="text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100">
                 {isGuest
                   ? "Voice Dictation & Hands-Free Control"
                   : isTranscribing
@@ -181,7 +181,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
                 </span>
               )}
             </div>
-            <p className={`text-xs ${isActive && !isGuest ? "text-slate-400" : "text-slate-500"}`}>
+            <p className={`text-xs ${isActive && !isGuest ? "text-slate-400" : "text-slate-500 dark:text-slate-400"}`}>
               {isGuest
                 ? "Guest accounts are limited to conversation mode. Sign in to speak or dictate."
                 : isActive
@@ -194,13 +194,13 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
         {/* Right: Mode Selector & Cheatsheet Toggle */}
         <div className="flex items-center gap-2">
           {/* Mode Selector Tabs */}
-          <div className="flex items-center bg-black/10 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/50 text-xs">
+          <div className="flex items-center bg-black/10 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/60 text-xs">
             <button
               type="button"
               onClick={() => handleModeSwitch("handsfree")}
               className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                 voiceMode === "handsfree"
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
                   : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white"
               }`}
             >
@@ -211,11 +211,11 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
               onClick={() => handleModeSwitch("audio-record")}
               className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 ${
                 voiceMode === "audio-record"
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
                   : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white"
               }`}
             >
-              <Sparkles className="w-3 h-3 text-indigo-500" />
+              <Sparkles className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
               Gemini HD Audio
             </button>
           </div>
@@ -227,7 +227,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             className={`p-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1 cursor-pointer ${
               isActive && !isGuest
                 ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
             }`}
             title="Spoken voice commands list"
           >
@@ -290,16 +290,16 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
       {error && !isGuest && (
         <div
           id="voice-error-banner"
-          className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2"
+          className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between gap-2"
         >
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>{error}</span>
           </div>
           <button
             type="button"
             onClick={() => onStartAudioRecording()}
-            className="text-xs font-bold text-rose-900 underline hover:no-underline cursor-pointer"
+            className="text-xs font-bold text-rose-900 dark:text-rose-300 underline hover:no-underline cursor-pointer"
           >
             Try Gemini Audio Record
           </button>
@@ -312,8 +312,8 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
           id="voice-commands-cheatsheet"
           className={`p-4 rounded-xl border space-y-2.5 text-xs transition-all ${
             isActive && !isGuest
-              ? "bg-slate-800/80 border-slate-700/80 text-slate-300"
-              : "bg-white border-slate-200 text-slate-700 shadow-xs"
+              ? "bg-slate-800/80 dark:bg-slate-900/80 border-slate-700/80 dark:border-slate-750 text-slate-300 dark:text-slate-300"
+              : "bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 shadow-xs"
           }`}
         >
           <div className="flex items-center justify-between">

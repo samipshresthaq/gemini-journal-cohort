@@ -12,6 +12,7 @@ import {
   subscribeToUserEntries, 
   deleteJournalEntry, 
   toggleEntryFavorite,
+  migrateGuestEntriesToFirestore,
   logUserInteraction 
 } from "./lib/firestoreService";
 import { sendReflectionPrompt, generateReflectionSummary } from "./lib/geminiService";
@@ -102,7 +103,7 @@ export default function App() {
 
   // 2. Listen to Firebase Authentication state & restore guest session if present
   useEffect(() => {
-    const unsubscribe = subscribeToAuth((fbUser) => {
+    const unsubscribe = subscribeToAuth(async (fbUser) => {
       if (fbUser) {
         const authUserData: AuthUser = {
           uid: fbUser.uid,
@@ -110,6 +111,31 @@ export default function App() {
           displayName: fbUser.displayName,
           photoURL: fbUser.photoURL,
         };
+
+        // Check if there was an active guest session to migrate
+        try {
+          const storedGuest = localStorage.getItem(GUEST_SESSION_KEY);
+          if (storedGuest) {
+            const parsedGuest = JSON.parse(storedGuest);
+            if (parsedGuest?.uid?.startsWith("guest_")) {
+              await migrateGuestEntriesToFirestore(parsedGuest.uid, fbUser.uid);
+            }
+          }
+
+          // Also scan for any lingering guest entry keys in localStorage
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("gemini_journal_guest_entries_guest_")) {
+              const guestUid = key.replace("gemini_journal_guest_entries_", "");
+              if (guestUid) {
+                await migrateGuestEntriesToFirestore(guestUid, fbUser.uid);
+              }
+            }
+          }
+        } catch (migErr) {
+          console.warn("Guest entries migration completed with notices:", migErr);
+        }
+
         setUser(authUserData);
         localStorage.removeItem(GUEST_SESSION_KEY);
       } else {
