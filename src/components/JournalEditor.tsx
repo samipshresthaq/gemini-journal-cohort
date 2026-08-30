@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { AuthUser, JournalEntry, JournalMessage, PromptStarter, SaveStatus } from "../types";
+import { AuthUser, JournalEntry, JournalMessage, PromptStarter, SaveStatus, AttachedNote } from "../types";
 import { PromptStarters } from "./PromptStarters";
 import { SummaryCard } from "./SummaryCard";
 import { VoiceControlPanel } from "./VoiceControlPanel";
+import { NotePreviewModal } from "./NotePreviewModal";
 import { useVoiceDictation } from "../hooks/useVoiceDictation";
+import { extractDocumentNotes } from "../lib/geminiService";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { 
@@ -24,7 +26,15 @@ import {
   Mic,
   MicOff,
   Lock,
-  MessageSquare
+  MessageSquare,
+  Paperclip,
+  FileText,
+  File,
+  X,
+  Eye,
+  PlusCircle,
+  UploadCloud,
+  FileCheck
 } from "lucide-react";
 
 interface JournalEditorProps {
@@ -88,8 +98,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 }) => {
   const [inputText, setInputText] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [attachedNote, setAttachedNote] = useState<AttachedNote | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const userConversationCount = entry.messages.filter((m) => m.role === "user").length;
   const isEntryConversationLimitReached = isGuest && userConversationCount >= maxGuestConversationsPerEntry;
@@ -99,9 +115,113 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [entry.messages, isGeneratingReply]);
 
+  // File Upload & Processing Handler
+  const handleProcessFile = async (file: File) => {
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock Note & PDF Attachment",
+        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an account. Sign in to attach notes."
+      );
+      return;
+    }
+
+    setNoteError(null);
+
+    // Validate size (max 15MB)
+    if (file.size > 15 * 1024 * 1024) {
+      setNoteError("File is too large. Please upload documents under 15MB.");
+      return;
+    }
+
+    const noteInit: AttachedNote = {
+      fileName: file.name,
+      fileType: file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "text/plain"),
+      fileSize: file.size,
+      extractedText: "",
+      isProcessing: true,
+      error: null,
+    };
+
+    setAttachedNote(noteInit);
+
+    try {
+      const result = await extractDocumentNotes(file);
+      if (!result.extractedText) {
+        throw new Error("No readable text found in document.");
+      }
+
+      setAttachedNote({
+        ...noteInit,
+        extractedText: result.extractedText,
+        isProcessing: false,
+      });
+    } catch (err: any) {
+      console.error("Failed to process document:", err);
+      const errMsg = err.message || "Failed to extract text from document.";
+      setAttachedNote((prev) => prev ? { ...prev, isProcessing: false, error: errMsg } : null);
+      setNoteError(errMsg);
+    }
+  };
+
+  const handleAttachNoteClick = () => {
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock Note & PDF Attachment",
+        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an account. Sign in to attach notes."
+      );
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleProcessFile(files[0]);
+    }
+    // Reset file input value so same file can be re-selected if desired
+    if (e.target) {
+      e.target.value = "";
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    if (isGuest) {
+      onRequireAuth?.(
+        "Unlock Note & PDF Attachment",
+        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an account. Sign in to attach notes."
+      );
+      return;
+    }
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      handleProcessFile(file);
+    }
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isGeneratingReply) return;
+    
+    // Allow sending if there's either typed text OR an extracted attached note ready
+    const hasNoteText = Boolean(attachedNote && attachedNote.extractedText && !attachedNote.isProcessing);
+    if ((!inputText.trim() && !hasNoteText) || isGeneratingReply) return;
 
     if (isEntryConversationLimitReached) {
       onRequireAuth?.(
@@ -112,8 +232,52 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     }
 
     const textToSend = inputText.trim();
+    let finalMessage = textToSend;
+
+    if (attachedNote && attachedNote.extractedText && !attachedNote.isProcessing) {
+      const noteHeader = `📄 **Attached Journal Note: ${attachedNote.fileName}**`;
+      const noteContentBlock = `\`\`\`\n${attachedNote.extractedText}\n\`\`\``;
+      
+      if (textToSend) {
+        finalMessage = `${noteHeader}\n\n${noteContentBlock}\n\n**My Reflection & Thoughts:**\n${textToSend}`;
+      } else {
+        finalMessage = `${noteHeader}\n\n${noteContentBlock}\n\n*I wrote this note earlier for my journal. Please review it, help me reflect deeply on what I've written, identify recurring themes or emotions, and guide me with thoughtful reflection questions.*`;
+      }
+    }
+
     setInputText("");
-    await onSendMessage(textToSend);
+    setAttachedNote(null);
+    setNoteError(null);
+    await onSendMessage(finalMessage);
+  };
+
+  const handleReflectDirectlyFromModal = async (text: string) => {
+    if (isEntryConversationLimitReached) {
+      onRequireAuth?.(
+        `Conversation Limit Reached (${maxGuestConversationsPerEntry} of ${maxGuestConversationsPerEntry} in this Entry)`,
+        `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per reflection entry. Sign in with an account to continue conversing.`
+      );
+      return;
+    }
+
+    const noteName = attachedNote?.fileName || "Note Document";
+    const noteMessage = `📄 **Attached Journal Note: ${noteName}**\n\n\`\`\`\n${text}\n\`\`\`\n\n*I wrote this note earlier for my journal. Please review it, help me reflect deeply on what I've written, identify recurring themes or emotions, and guide me with thoughtful reflection questions.*`;
+    
+    setAttachedNote(null);
+    setInputText("");
+    await onSendMessage(noteMessage);
+  };
+
+  const handleInsertNoteIntoDraft = (text: string) => {
+    setInputText((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return text;
+      return `${trimmed}\n\n${text}`;
+    });
+    setAttachedNote(null);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -207,7 +371,33 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   return (
-    <div id="journal-editor-container" className="max-w-4xl mx-auto space-y-6 pb-16">
+    <div
+      id="journal-editor-container"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="max-w-4xl mx-auto space-y-6 pb-16 relative"
+    >
+      {/* Drag & Drop Visual Overlay */}
+      {isDraggingOver && (
+        <div
+          id="journal-dropzone-overlay"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-150"
+        >
+          <div className="bg-white dark:bg-slate-900 border-2 border-dashed border-indigo-500 rounded-3xl p-8 max-w-md w-full flex flex-col items-center gap-3 shadow-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-inner">
+              <UploadCloud className="w-8 h-8 animate-bounce" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Drop your note or PDF here
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              We'll extract the text and load it into your reflection session seamlessly.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Guest Mode Notice Banner */}
       {isGuest && (
         <div
@@ -234,7 +424,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                 {isEntryConversationLimitReached
                   ? `You have reached the maximum of ${maxGuestConversationsPerEntry} conversations for this reflection. Sign in with an account to continue conversing without limits${totalGuestEntries < maxGuestEntries ? " or start your 2nd entry." : "."}`
-                  : `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per entry and ${maxGuestEntries} total entries. Advanced features (Summaries, Voice, Cloud backup) require an account.`}
+                  : `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per entry and ${maxGuestEntries} total entries. Advanced features (Summaries, Voice, Note/PDF Attachments, Cloud backup) require an account.`}
               </p>
             </div>
           </div>
@@ -447,19 +637,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 <div
                   className={`text-sm leading-relaxed ${
                     isUser
-                      ? "text-slate-100 whitespace-pre-wrap"
+                      ? "text-slate-100 prose prose-invert max-w-none prose-p:my-1 prose-pre:my-2 prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-slate-800 prose-pre:text-slate-200"
                       : "text-slate-800 dark:text-slate-200 prose prose-slate dark:prose-invert max-w-none prose-p:leading-relaxed prose-headings:font-bold prose-headings:text-slate-900 dark:prose-headings:text-slate-100"
                   }`}
                 >
-                  {isUser ? (
-                    msg.content
-                  ) : (
-                    <div className="markdown-body">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
-                  )}
+                  <div className="markdown-body">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             </div>
@@ -582,6 +768,90 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
         ) : (
           <>
+            {/* Attached Note Preview Pill/Card */}
+            {attachedNote && (
+              <div
+                id="attached-note-card"
+                className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+                  noteError || attachedNote.error
+                    ? "bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200"
+                    : attachedNote.isProcessing
+                    ? "bg-indigo-50/80 dark:bg-indigo-950/50 border-indigo-200/80 dark:border-indigo-800/60 text-indigo-950 dark:text-indigo-200 animate-pulse"
+                    : "bg-slate-50 dark:bg-slate-800/80 border-slate-200/90 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold truncate max-w-[150px] sm:max-w-xs">
+                        {attachedNote.fileName}
+                      </span>
+                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
+                        {attachedNote.fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "TXT"} • {(attachedNote.fileSize / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                      {attachedNote.isProcessing ? (
+                        <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-medium">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Extracting note text with Gemini...</span>
+                        </span>
+                      ) : noteError || attachedNote.error ? (
+                        <span className="text-rose-600 dark:text-rose-400">{noteError || attachedNote.error}</span>
+                      ) : (
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                          <FileCheck className="w-3 h-3" />
+                          <span>Note extracted & attached ({attachedNote.extractedText.length} characters)</span>
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {!attachedNote.isProcessing && !attachedNote.error && !noteError && (
+                    <>
+                      <button
+                        type="button"
+                        id="btn-note-view-text"
+                        onClick={() => setIsPreviewOpen(true)}
+                        title="Inspect or edit extracted note text"
+                        className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Preview</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-note-insert-draft"
+                        onClick={() => handleInsertNoteIntoDraft(attachedNote.extractedText)}
+                        title="Insert text into draft prompt"
+                        className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Insert</span>
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    id="btn-note-remove"
+                    onClick={() => {
+                      setAttachedNote(null);
+                      setNoteError(null);
+                    }}
+                    title="Remove attached note"
+                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="relative">
               <textarea
                 id="textarea-journal-prompt"
@@ -591,11 +861,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  entry.messages.length === 0
-                    ? "Write your thoughts or choose a prompt starter to reflect with Gemini..."
+                  attachedNote && !attachedNote.isProcessing
+                    ? "Add your reflections or questions about this note (or click Reflect to analyze directly)..."
+                    : entry.messages.length === 0
+                    ? "Write your thoughts, attach a note/PDF, or choose a prompt starter to reflect with Gemini..."
                     : isGuest
                     ? `Continue reflection with Gemini (Conversation ${userConversationCount + 1} of ${maxGuestConversationsPerEntry})...`
-                    : "Continue your conversation with Gemini..."
+                    : "Continue your conversation with Gemini, or attach a written note/PDF..."
                 }
                 className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 leading-relaxed max-h-48"
               />
@@ -615,6 +887,52 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               </div>
 
               <div className="flex items-center gap-2 ml-auto">
+                {/* Hidden File Input for Text / Markdown / PDF */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  id="input-note-file"
+                  onChange={handleFileInputChange}
+                  accept=".txt,.md,.markdown,.json,.csv,.rtf,.pdf,text/*,application/pdf"
+                  className="hidden"
+                />
+
+                {/* Attach Note (.txt, .pdf) Button */}
+                <button
+                  id="btn-composer-attach-note"
+                  type="button"
+                  onClick={handleAttachNoteClick}
+                  title={
+                    isGuest
+                      ? "Sign in to attach notes & PDFs"
+                      : attachedNote
+                      ? "Note attached - click to choose another"
+                      : "Attach note or PDF document (.txt, .md, .pdf)"
+                  }
+                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isGuest
+                      ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                      : attachedNote
+                      ? "bg-indigo-50 dark:bg-indigo-950/70 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                  }`}
+                >
+                  {isGuest ? (
+                    <>
+                      <Paperclip className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                      <span className="text-xs font-semibold hidden md:inline">Attach Note</span>
+                      <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    </>
+                  ) : (
+                    <>
+                      <Paperclip className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold hidden md:inline">
+                        {attachedNote ? "Note Attached" : "Attach Note"}
+                      </span>
+                    </>
+                  )}
+                </button>
+
                 {/* Quick Mic Action in Toolbar */}
                 <button
                   id="btn-composer-quick-mic"
@@ -662,7 +980,11 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 <button
                   id="btn-send-reflection-prompt"
                   type="submit"
-                  disabled={!inputText.trim() || isGeneratingReply}
+                  disabled={
+                    (!inputText.trim() && !(attachedNote && attachedNote.extractedText && !attachedNote.isProcessing)) ||
+                    isGeneratingReply ||
+                    (attachedNote?.isProcessing ?? false)
+                  }
                   className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-2 shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isGeneratingReply ? (
@@ -682,6 +1004,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </>
         )}
       </form>
+
+      {/* Note Inspection & Preview Modal */}
+      {isPreviewOpen && attachedNote && (
+        <NotePreviewModal
+          note={attachedNote}
+          onClose={() => setIsPreviewOpen(false)}
+          onUpdateText={(newText) => {
+            setAttachedNote((prev) => (prev ? { ...prev, extractedText: newText } : null));
+          }}
+          onInsertIntoDraft={handleInsertNoteIntoDraft}
+          onReflectDirectly={handleReflectDirectlyFromModal}
+        />
+      )}
     </div>
   );
 };

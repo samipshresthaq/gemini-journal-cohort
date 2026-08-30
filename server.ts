@@ -242,6 +242,67 @@ Generate a concise, deeply structured summary in JSON format conforming to this 
     }
   });
 
+  // Document & PDF Text Extraction Endpoint
+  app.post("/api/gemini/extract-doc", async (req: Request, res: Response) => {
+    try {
+      const body = (req.body && typeof req.body === "object") ? req.body : {};
+      const { fileBase64, mimeType, fileName } = body;
+
+      if (!fileBase64 || typeof fileBase64 !== "string") {
+        res.status(400).json({ error: "Invalid payload: 'fileBase64' string is required." });
+        return;
+      }
+
+      const cleanMimeType = mimeType || (fileName?.toLowerCase().endsWith(".pdf") ? "application/pdf" : "text/plain");
+
+      // For plain text files, decode base64 directly
+      if (cleanMimeType.startsWith("text/") || cleanMimeType === "application/json" || cleanMimeType === "application/rtf") {
+        const base64Data = fileBase64.replace(/^data:[^;]+;base64,/, "");
+        const decodedText = Buffer.from(base64Data, "base64").toString("utf-8");
+        res.json({
+          extractedText: decodedText.trim(),
+          modelUsed: "local-decoder",
+        });
+        return;
+      }
+
+      // For PDFs or other document formats, use Gemini Multimodal extraction
+      const contents = [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: "application/pdf",
+                data: fileBase64.replace(/^data:application\/pdf;base64,/, "").trim(),
+              },
+            },
+            {
+              text: `Please extract all user notes, written journal reflections, thoughts, and text from this attached document (${fileName || "uploaded document"}).
+Extract the full content accurately with proper paragraph breaks, headings, and bullet points. Preserve the original voice, reflections, and insights. Return ONLY the clean extracted text/markdown without conversational filler or meta commentary.`,
+            },
+          ],
+        },
+      ];
+
+      const result = await generateContentWithFallback({
+        contents,
+        systemInstruction: "You are a precise document text and journal note extractor. Return the verbatim text and structured notes from the document clearly and completely.",
+        temperature: 0.1,
+      });
+
+      res.json({
+        extractedText: result.text.trim(),
+        modelUsed: result.modelUsed,
+      });
+    } catch (error: any) {
+      console.error("[API Error] /api/gemini/extract-doc:", error);
+      res.status(500).json({
+        error: error.message || "Failed to extract text from document.",
+      });
+    }
+  });
+
   // Vite Middleware configuration
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

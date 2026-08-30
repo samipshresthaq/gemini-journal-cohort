@@ -28,7 +28,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   title = "Sign In to Unlock All Features",
-  description = "Guest mode allows up to 2 basic conversations. Sign in with an account to unlock growth summaries, voice dictation, cloud synchronization, and unlimited history.",
+  description = "Guest mode allows up to 2 basic conversations. Sign in with an account to unlock growth summaries, voice dictation, written note & PDF attachments, cloud synchronization, and unlimited history.",
   onSignInWithGoogle,
   onSignInWithEmail,
   onSignUpWithEmail,
@@ -334,7 +334,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>Cloud Firestore Backup</span>
+              <span>Notes & PDF Attachment</span>
+            </div>
+            <div className="flex items-center gap-1.5 col-span-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Cloud Firestore Backup & Synchronization</span>
             </div>
           </div>
         </div>

@@ -46,6 +46,15 @@ export interface PromptStarter {
   iconName: string;
 }
 
+export interface AttachedNote {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  extractedText: string;
+  isProcessing?: boolean;
+  error?: string | null;
+}
+
 export type VoiceMode = 'dictate' | 'handsfree' | 'audio-record';
 
 export interface VoiceStatus {
