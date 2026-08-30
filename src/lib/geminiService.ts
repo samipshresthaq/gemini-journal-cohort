@@ -65,6 +65,9 @@ export async function extractDocumentNotes(file: File): Promise<ExtractDocRespon
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
+          if (response.status === 429) {
+            throw new Error(errData.error || "Document extraction rate limit reached. Please wait a few minutes before uploading again.");
+          }
           throw new Error(errData.error || `Document extraction failed with status ${response.status}`);
         }
 
@@ -97,6 +100,9 @@ export async function sendReflectionPrompt(params: {
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error(errData.error || "Rate limit reached. Please wait a few seconds before reflecting again.");
+    }
     throw new Error(errData.error || `Gemini API request failed with status ${response.status}`);
   }
 
@@ -120,6 +126,9 @@ export async function generateReflectionSummary(params: {
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error(errData.error || "Rate limit reached for AI summaries. Please wait a few seconds before requesting another summary.");
+    }
     throw new Error(errData.error || `Summary request failed with status ${response.status}`);
   }
 

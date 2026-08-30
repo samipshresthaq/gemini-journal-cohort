@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
@@ -78,9 +79,76 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Trust proxy for accurate client IP extraction behind reverse proxy / ingress
+  app.set("trust proxy", 1);
+
   // Top-Level Request Deserialization (Ordering Guarantee)
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+  // ==========================================
+  // RATE LIMITING & DDOS MITIGATION RULES
+  // ==========================================
+
+  // 1. Anti-DDoS Burst Limiter: catches rapid automated spam and flood bursts
+  const ddosBurstLimiter = rateLimit({
+    windowMs: 10 * 1000, // 10 seconds sliding window
+    limit: 30, // max 30 requests per 10 seconds per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    statusCode: 429,
+    message: {
+      error: "High request volume detected. Please slow down and try again.",
+      retryAfterSeconds: 10,
+      code: "RATE_LIMIT_BURST_EXCEEDED",
+    },
+  });
+
+  // 2. General API Rate Limiter: overall API protection
+  const generalApiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes sliding window
+    limit: 150, // max 150 requests per 15 minutes per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    statusCode: 429,
+    message: {
+      error: "Too many requests to the API. Please wait a few moments before trying again.",
+      retryAfterSeconds: 60,
+      code: "RATE_LIMIT_API_EXCEEDED",
+    },
+  });
+
+  // 3. AI Inference & Reflection Limiter: protects heavy LLM compute & token quotas
+  const aiInferenceLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute window
+    limit: 25, // max 25 reflection/summary calls per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    statusCode: 429,
+    message: {
+      error: "Too many AI reflection requests. Please wait a few seconds before reflecting again.",
+      retryAfterSeconds: 30,
+      code: "RATE_LIMIT_AI_EXCEEDED",
+    },
+  });
+
+  // 4. Media & Document Ingestion Limiter: protects against heavy payload/audio abuse
+  const mediaProcessingLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes window
+    limit: 20, // max 20 audio transcriptions or document uploads per 5 minutes per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    statusCode: 429,
+    message: {
+      error: "Document upload or audio recording rate limit reached. Please wait a few minutes before trying again.",
+      retryAfterSeconds: 60,
+      code: "RATE_LIMIT_MEDIA_EXCEEDED",
+    },
+  });
+
+  // Mount global burst and general API limiters to all /api/ endpoints
+  app.use("/api/", ddosBurstLimiter);
+  app.use("/api/", generalApiLimiter);
 
   // Health check endpoint
   app.get("/api/health", (_req: Request, res: Response) => {
@@ -89,11 +157,18 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       service: "Gemini Reflection Journal API",
       hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+      rateLimiting: {
+        enabled: true,
+        burstProtection: "30 req / 10s",
+        generalApi: "150 req / 15m",
+        aiInference: "25 req / 1m",
+        mediaProcessing: "20 req / 5m",
+      },
     });
   });
 
   // Multi-turn Journal Reflection Endpoint
-  app.post("/api/gemini/reflect", async (req: Request, res: Response) => {
+  app.post("/api/gemini/reflect", aiInferenceLimiter, async (req: Request, res: Response) => {
     try {
       // Defensive Payload Ingestion (Null-Safe Destructuring)
       const body = (req.body && typeof req.body === "object") ? req.body : {};
@@ -138,7 +213,7 @@ Your purpose is to help the user reflect deeply on their thoughts, feelings, dai
   });
 
   // Structured Journal Summarization & Action Extraction Endpoint
-  app.post("/api/gemini/summarize", async (req: Request, res: Response) => {
+  app.post("/api/gemini/summarize", aiInferenceLimiter, async (req: Request, res: Response) => {
     try {
       // Defensive Payload Ingestion
       const body = (req.body && typeof req.body === "object") ? req.body : {};
@@ -194,7 +269,7 @@ Generate a concise, deeply structured summary in JSON format conforming to this 
   });
 
   // Audio Multimodal Voice Transcription Endpoint
-  app.post("/api/gemini/transcribe", async (req: Request, res: Response) => {
+  app.post("/api/gemini/transcribe", mediaProcessingLimiter, async (req: Request, res: Response) => {
     try {
       // Defensive Payload Ingestion (Null-Safe Destructuring)
       const body = (req.body && typeof req.body === "object") ? req.body : {};
@@ -243,7 +318,7 @@ Generate a concise, deeply structured summary in JSON format conforming to this 
   });
 
   // Document & PDF Text Extraction Endpoint
-  app.post("/api/gemini/extract-doc", async (req: Request, res: Response) => {
+  app.post("/api/gemini/extract-doc", mediaProcessingLimiter, async (req: Request, res: Response) => {
     try {
       const body = (req.body && typeof req.body === "object") ? req.body : {};
       const { fileBase64, mimeType, fileName } = body;
