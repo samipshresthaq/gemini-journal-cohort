@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AuthUser, JournalEntry } from "../types";
+import { AuthUser, JournalEntry, UserStreak } from "../types";
 import { 
   User as UserIcon, 
   Mail, 
@@ -17,7 +17,9 @@ import {
   Edit3, 
   Loader2, 
   Calendar,
-  Layers
+  Layers,
+  Flame,
+  Zap
 } from "lucide-react";
 import { updateUserProfile } from "../firebase";
 
@@ -25,6 +27,7 @@ interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: AuthUser;
+  streak?: UserStreak | null;
   entries: JournalEntry[];
   onSignOut: () => void;
   onProfileUpdated: (updatedUser: AuthUser) => void;
@@ -35,6 +38,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   isOpen,
   onClose,
   user,
+  streak,
   entries,
   onSignOut,
   onProfileUpdated,
@@ -316,6 +320,68 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Daily Login Streak Card (Only available for authenticated accounts) */}
+          {!isGuest && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Continuous Login Streak</h4>
+                {streak && streak.longestStreak > 0 && (
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Best: {streak.longestStreak} {streak.longestStreak === 1 ? "day" : "days"}
+                  </span>
+                )}
+              </div>
+
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 dark:from-amber-950/40 dark:via-orange-950/40 dark:to-indigo-950/40 border border-amber-200/80 dark:border-amber-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                <div className="flex items-center gap-3.5">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md shrink-0 ${
+                    (streak?.currentStreak || 0) > 0
+                      ? "bg-gradient-to-br from-amber-500 to-orange-600 text-white"
+                      : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                  }`}>
+                    <Flame className={`w-6 h-6 ${
+                      (streak?.currentStreak || 0) > 0
+                        ? "fill-amber-200 text-amber-100 animate-pulse"
+                        : "text-slate-400 dark:text-slate-500"
+                    }`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight">
+                        {streak?.currentStreak || 0}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                        {(streak?.currentStreak || 0) === 0
+                          ? "Day 1 (Streak starts Day 2)"
+                          : (streak?.currentStreak || 0) === 1
+                          ? "Day Streak"
+                          : "Days Continuous Streak"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      {streak?.streakBroken
+                        ? "⚠️ Streak was reset after a skipped day. Today is Day 1 of your new cycle. Log in tomorrow to earn a 1-day streak!"
+                        : (streak?.currentStreak || 0) > 1
+                        ? `🔥 You have logged in for ${(streak?.currentStreak || 0) + 1} consecutive days! Log in tomorrow to reach ${(streak?.currentStreak || 0) + 1} days streak.`
+                        : (streak?.currentStreak || 0) === 1
+                        ? "🔥 1-Day Streak active! You logged in for 2 consecutive days. Log in tomorrow to reach a 2-day streak."
+                        : "🌱 Welcome! Streaks start from Day 2 as a 1-day streak. Log in tomorrow to activate your streak badge!"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 border-amber-200/60 dark:border-amber-900/60 pt-2 sm:pt-0">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">
+                    Streak Rule
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 text-right">
+                    Day 2 = 1 day streak • Skip = reset
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Journaling Statistics Grid */}
           <div className="space-y-3">

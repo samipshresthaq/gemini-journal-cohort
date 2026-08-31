@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { AuthUser, JournalEntry, JournalMessage, SaveStatus } from "./types";
+import { AuthUser, JournalEntry, JournalMessage, SaveStatus, UserStreak } from "./types";
 import { 
   signInWithGoogle, 
   signInWithEmail,
@@ -15,6 +15,11 @@ import {
   migrateGuestEntriesToFirestore,
   logUserInteraction 
 } from "./lib/firestoreService";
+import { 
+  recordUserLoginStreak, 
+  subscribeToUserStreak, 
+  migrateGuestStreakToFirestore 
+} from "./lib/streakService";
 import { sendReflectionPrompt, generateReflectionSummary } from "./lib/geminiService";
 import { Navbar } from "./components/Navbar";
 import { LandingPage } from "./components/LandingPage";
@@ -41,6 +46,7 @@ export default function App() {
   });
 
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [streak, setStreak] = useState<UserStreak | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -119,6 +125,7 @@ export default function App() {
             const parsedGuest = JSON.parse(storedGuest);
             if (parsedGuest?.uid?.startsWith("guest_")) {
               await migrateGuestEntriesToFirestore(parsedGuest.uid, fbUser.uid);
+              await migrateGuestStreakToFirestore(parsedGuest.uid, fbUser.uid);
             }
           }
 
@@ -129,6 +136,7 @@ export default function App() {
               const guestUid = key.replace("gemini_journal_guest_entries_", "");
               if (guestUid) {
                 await migrateGuestEntriesToFirestore(guestUid, fbUser.uid);
+                await migrateGuestStreakToFirestore(guestUid, fbUser.uid);
               }
             }
           }
@@ -193,6 +201,36 @@ export default function App() {
 
     return () => unsubscribe();
   }, [user, createNewEmptyEntry]);
+
+  // 3. Daily login streak synchronization & real-time updates (Authenticated users only)
+  useEffect(() => {
+    if (!user || user.uid.startsWith("guest_")) {
+      setStreak(null);
+      return;
+    }
+
+    let isMounted = true;
+    recordUserLoginStreak(user.uid)
+      .then((calculatedStreak) => {
+        if (isMounted) {
+          setStreak(calculatedStreak);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not record daily login streak:", err);
+      });
+
+    const unsubscribe = subscribeToUserStreak(user.uid, (updatedStreak) => {
+      if (isMounted) {
+        setStreak(updatedStreak);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [user?.uid]);
 
   // Auth actions
   const handleSignIn = async () => {
@@ -542,6 +580,7 @@ export default function App() {
       {/* Top Navigation */}
       <Navbar
         user={user}
+        streak={streak}
         theme={theme}
         onToggleTheme={toggleTheme}
         isGuest={isGuest}
@@ -575,6 +614,7 @@ export default function App() {
         ) : activeEntry ? (
           <JournalEditor
             user={user}
+            streak={streak}
             isGuest={isGuest}
             onRequireAuth={triggerAuthModal}
             entry={activeEntry}
@@ -626,6 +666,7 @@ export default function App() {
           isOpen={isProfileOpen}
           onClose={() => setIsProfileOpen(false)}
           user={user}
+          streak={streak}
           entries={entries}
           onSignOut={handleSignOut}
           onProfileUpdated={(updated) => setUser(updated)}

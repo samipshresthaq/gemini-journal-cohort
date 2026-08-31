@@ -57,6 +57,14 @@ export interface AttachedNote {
 
 export type VoiceMode = 'dictate' | 'handsfree' | 'audio-record';
 
+export interface UserStreak {
+  currentStreak: number;
+  longestStreak: number;
+  lastLoginDate: string; // YYYY-MM-DD local format
+  streakBroken?: boolean;
+  lastCalculatedAt: number;
+}
+
 export interface VoiceStatus {
   isListening: boolean;
   isRecordingAudio: boolean;

@@ -127,6 +127,42 @@ const TEST_CASES: TestCase[] = [
     ],
     expected: "Spoken speech is accurately transcribed in realtime and appended to the reflection prompt textarea.",
   },
+  {
+    id: "TC-10",
+    category: "Engagement & Retention",
+    title: "Continuous Daily Login Streak Mechanism (Day 2+ & Auth Only)",
+    steps: [
+      "Log in as a Guest user and verify that streak indicators are NOT shown (streaks are exclusive to authenticated accounts).",
+      "Sign in with Google / Email for the first time (Day 1) and verify no streak count badge is shown in the navbar or editor header.",
+      "Open the user Profile Modal to verify the account status indicates Day 1 active (streak starts on Day 2).",
+      "Log in on continuous consecutive Day 2 to verify the flame streak badge appears displaying '1 day streak'.",
+      "Log in on Day 3 to watch the continuous streak increment to '2 days streak'.",
+      "If a calendar day is skipped, verify streak breaks and resets from 0 (restarting at Day 1 with no badge until Day 2).",
+    ],
+    expected: "Streaks are authenticated-only, counted from Day 2 as a 1-day streak, hidden on Day 1, and reset to 0 upon skipped calendar days.",
+  },
+  {
+    id: "TC-11",
+    category: "Security & DDoS Defense",
+    title: "Multi-Tier Express Rate Limiting",
+    steps: [
+      "Send consecutive API requests to test the anti-DDoS and inference limits.",
+      "Verify anti-DDoS (30 req / 10s), general API (150 req / 15m), and Gemini inference rate limiters.",
+      "Observe that exceeding limits returns clean HTTP 429 Too Many Requests with user-friendly retry banners.",
+    ],
+    expected: "Express rate limiters safeguard backend endpoints against abuse and overload without crashing.",
+  },
+  {
+    id: "TC-12",
+    category: "History & Performance",
+    title: "Infinite Scroll History Pagination (10 Per Batch)",
+    steps: [
+      "Click 'Past Entries' in the top navbar to open the reflective journal drawer.",
+      "Scroll down to the bottom of the past entries list.",
+      "Observe the intersection observer automatically fetching and displaying the next batch of 10 entries smoothly.",
+    ],
+    expected: "Past entries load in 10-item pages on demand with a smooth loading indicator.",
+  },
 ];
 
 export const WalkthroughGuide: React.FC<WalkthroughGuideProps> = ({

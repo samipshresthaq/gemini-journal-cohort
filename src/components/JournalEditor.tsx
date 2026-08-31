@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { AuthUser, JournalEntry, JournalMessage, PromptStarter, SaveStatus, AttachedNote } from "../types";
+import { AuthUser, JournalEntry, JournalMessage, PromptStarter, SaveStatus, AttachedNote, UserStreak } from "../types";
 import { PromptStarters } from "./PromptStarters";
 import { SummaryCard } from "./SummaryCard";
 import { VoiceControlPanel } from "./VoiceControlPanel";
@@ -34,11 +34,13 @@ import {
   Eye,
   PlusCircle,
   UploadCloud,
-  FileCheck
+  FileCheck,
+  Flame
 } from "lucide-react";
 
 interface JournalEditorProps {
   user: AuthUser;
+  streak?: UserStreak | null;
   isGuest?: boolean;
   onRequireAuth?: (title?: string, description?: string) => void;
   entry: JournalEntry;
@@ -79,6 +81,7 @@ const TOPICS = [
 
 export const JournalEditor: React.FC<JournalEditorProps> = ({
   user,
+  streak,
   isGuest = false,
   onRequireAuth,
   entry,
@@ -467,9 +470,21 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             placeholder="Give this reflection a title..."
             className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 border-none outline-none focus:ring-0 w-full placeholder:text-slate-300 dark:placeholder:text-slate-600 bg-transparent"
           />
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-            <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-            <span>{new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
+            {!isGuest && streak && streak.currentStreak > 0 && (
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${
+                streak.currentStreak > 1
+                  ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                  : "bg-amber-50/80 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/60"
+              }`}>
+                <Flame className={`w-3 h-3 ${streak.currentStreak > 1 ? "text-amber-500 fill-amber-400" : "text-amber-500 fill-amber-300"}`} />
+                <span>{streak.currentStreak} {streak.currentStreak === 1 ? "Day Streak" : "Days Streak"}</span>
+              </span>
+            )}
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+              <span>{new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+            </div>
           </div>
         </div>
 

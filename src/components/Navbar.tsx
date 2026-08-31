@@ -1,5 +1,5 @@
 import React from "react";
-import { AuthUser, SaveStatus } from "../types";
+import { AuthUser, SaveStatus, UserStreak } from "../types";
 import { 
   Sparkles, 
   LogOut, 
@@ -11,11 +11,13 @@ import {
   HelpCircle,
   Sun,
   Moon,
-  User as UserIcon
+  User as UserIcon,
+  Flame
 } from "lucide-react";
 
 interface NavbarProps {
   user: AuthUser | null;
+  streak?: UserStreak | null;
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
   isGuest?: boolean;
@@ -36,6 +38,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   user,
+  streak,
   theme = "light",
   onToggleTheme,
   isGuest = false,
@@ -116,6 +119,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="text-slate-500 dark:text-slate-400 font-medium">Cloud Synced</span>
                 )}
               </div>
+            )}
+
+            {/* Streak Indicator Pill (only for authenticated users with active streak >= 1 day) */}
+            {!isGuest && streak && streak.currentStreak > 0 && (
+              <button
+                id="btn-nav-streak-pill"
+                onClick={onOpenProfile}
+                title={`Daily Login Streak: ${streak.currentStreak} ${streak.currentStreak === 1 ? "day" : "days"} (Longest: ${streak.longestStreak} ${streak.longestStreak === 1 ? "day" : "days"}). Click to view stats.`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60"
+              >
+                <Flame
+                  className={`w-3.5 h-3.5 ${
+                    streak.currentStreak > 1
+                      ? "text-amber-500 fill-amber-400 animate-pulse"
+                      : "text-amber-500 fill-amber-300"
+                  }`}
+                />
+                <span className="font-extrabold">{streak.currentStreak}</span>
+                <span className="hidden sm:inline font-medium">
+                  {streak.currentStreak === 1 ? "day streak" : "days streak"}
+                </span>
+              </button>
             )}
 
             {isGuest && (
