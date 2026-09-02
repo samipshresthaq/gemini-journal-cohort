@@ -163,7 +163,73 @@ const TEST_CASES: TestCase[] = [
     ],
     expected: "Past entries load in 10-item pages on demand with a smooth loading indicator.",
   },
+  {
+    id: "TC-13",
+    category: "Weekly Digest & Synthesis",
+    title: "Weekly Journal AI Summary Synthesis (Registered Users Only)",
+    steps: [
+      "As a registered user, click 'Weekly Digest' in the top navbar or open it via the Profile Modal.",
+      "Click 'Generate This Week's Summary' to synthesize all reflections from the past 7 days.",
+      "Inspect the generated Weekly Theme title, overview narrative, emotional trajectory arc, core theme tags, breakthrough insights, and mindful action steps for the upcoming week.",
+      "Verify that guest users attempting to access the digest receive an invitation to sign in or register with their email address.",
+    ],
+    expected: "Gemini synthesizes the week's journal entries into a rich, holistic reflection summary for registered users.",
+  },
+  {
+    id: "TC-14",
+    category: "Weekly Email Dispatcher",
+    title: "Saturday Automated Email Dispatch & Responsive Newsletter Preview",
+    steps: [
+      "In the Weekly Digest modal, switch to the 'Email Newsletter Preview' tab to inspect the responsive HTML email template.",
+      "Click 'Send to [Your Email] Now' to trigger immediate test email delivery to your registered email address.",
+      "Observe the delivery confirmation banner showing successful dispatch via SMTP / Mail transport.",
+      "Switch to the 'Past Saturday Digests' tab to verify the sent summary is securely archived in your Firestore collection.",
+      "Check server logs to verify the Saturday 09:00 UTC automated cron dispatcher is initialized and operational.",
+    ],
+    expected: "HTML email newsletter is formatted, dispatched to the user's email address, and scheduled for automated Saturday delivery.",
+  },
+  {
+    id: "TC-15",
+    category: "System Administration",
+    title: "Dedicated Admin Route (/admin) & Default Seeded Administrator Gateway",
+    steps: [
+      "Navigate to '/admin' or click the purple 'Admin' button in the top navbar.",
+      "If not signed in, observe the dedicated Admin Gateway screen with Secret Manager governance status.",
+      "Enter your Secret Manager configured administrator credentials into the secure login form.",
+      "Observe the full-page Admin Portal render with top breadcrumb header, sub-route switcher ('Dashboard' and 'Users'), and 'Return to Journal' button.",
+      "Click 'Return to Journal' to verify seamless return to '/'.",
+    ],
+    expected: "Admin portal is mounted on its own dedicated route (/admin) with seamless login and return navigation.",
+  },
+  {
+    id: "TC-16",
+    category: "Executive Telemetry",
+    title: "Admin Dashboard: Total Users, Daily Signups & Gemini Chat Cost Usage Chart",
+    steps: [
+      "On the '/admin/dashboard' route, review the 4 KPI stat cards: Total Users (Active & Deactivated pills), Daily Signups, Gemini AI Requests, and Gemini Chat Cost ($ USD).",
+      "Inspect the 'Daily User Signups' Recharts chart: toggle between 'Daily' and 'Cumulative' view modes, and switch timeframes between 7 Days, 14 Days, and 30 Days.",
+      "Inspect the 'Gemini Chat Cost & Usage Chart' displaying daily estimated USD spend and inference volumes.",
+      "Review the 'Model Volume Distribution' pie chart and 'Feature & Endpoint Utilization' list.",
+      "Inspect the 'Live Gemini Inference Stream' table showing live timestamps, features, models used, tokens, latency ms, and estimated cost.",
+    ],
+    expected: "Executive dashboard accurately renders interactive Recharts visualizers for daily signups, total users, and Gemini chat cost metrics.",
+  },
+  {
+    id: "TC-17",
+    category: "User Access Control",
+    title: "User Management: Real-Time Activation, Deactivation & Security Audit Trail",
+    steps: [
+      "In the Admin Portal, click the 'Users' tab to navigate to the '/admin/users' route.",
+      "Search users by name, email, or user ID; filter by status (All, Active, Deactivated, Admins).",
+      "Click 'Deactivate' on a test user, provide an administrative reason, and confirm.",
+      "Notice the user status change to 'Deactivated' in realtime and an audit record logged in the 'Security Audit Trail' tab.",
+      "Attempt to deactivate your own admin account and observe the built-in self-protection safety guard prevent self-lockout.",
+      "Click 'Reactivate' to restore the user's active status immediately.",
+    ],
+    expected: "Admin can activate and deactivate users with safety guards, realtime state synchronization, and audit trail logging.",
+  },
 ];
+
 
 export const WalkthroughGuide: React.FC<WalkthroughGuideProps> = ({
   isOpen,

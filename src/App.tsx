@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { AuthUser, JournalEntry, JournalMessage, SaveStatus, UserStreak } from "./types";
+import { AuthUser, JournalEntry, JournalMessage, SaveStatus, UserStreak, UserProfile } from "./types";
 import { 
   signInWithGoogle, 
   signInWithEmail,
@@ -20,6 +20,12 @@ import {
   subscribeToUserStreak, 
   migrateGuestStreakToFirestore 
 } from "./lib/streakService";
+import { 
+  seedDefaultAdminAndDirectory, 
+  syncUserProfile, 
+  isSystemAdminEmail,
+  verifyAdminWithBackend,
+} from "./lib/adminService";
 import { sendReflectionPrompt, generateReflectionSummary } from "./lib/geminiService";
 import { Navbar } from "./components/Navbar";
 import { LandingPage } from "./components/LandingPage";
@@ -28,7 +34,10 @@ import { JournalHistory } from "./components/JournalHistory";
 import { WalkthroughGuide } from "./components/WalkthroughGuide";
 import { ProfileModal } from "./components/ProfileModal";
 import { AuthModal } from "./components/AuthModal";
-import { Loader2 } from "lucide-react";
+import { WeeklyDigestModal } from "./components/WeeklyDigestModal";
+import { AdminPanelModal } from "./components/AdminPanelModal";
+import { AdminLayout, AdminRoute } from "./components/admin/AdminLayout";
+import { Loader2, ShieldAlert, LogOut, Shield, ShieldCheck, KeyRound, ArrowLeft, Lock, ArrowRight } from "lucide-react";
 
 const GUEST_SESSION_KEY = "gemini_journal_active_guest";
 const MAX_GUEST_ENTRIES = 2;
@@ -46,6 +55,7 @@ export default function App() {
   });
 
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -55,6 +65,37 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWalkthroughOpen, setIsWalkthroughOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isWeeklyDigestOpen, setIsWeeklyDigestOpen] = useState(false);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+
+  // Dedicated Route Navigation State
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    try {
+      return window.location.pathname || "/";
+    } catch {
+      return "/";
+    }
+  });
+
+  const navigate = useCallback((newPath: string) => {
+    try {
+      if (window.location.pathname !== newPath) {
+        window.history.pushState({}, "", newPath);
+      }
+    } catch (_) {}
+    setCurrentPath(newPath);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname || "/");
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const isAdminRoute = currentPath.startsWith("/admin");
+  const adminSubRoute: AdminRoute = currentPath.includes("users") ? "users" : "dashboard";
 
   // Auth modal state for gating features
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -65,7 +106,15 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Admin gateway login form states
+  const [adminEmailInput, setAdminEmailInput] = useState("");
+  const [adminPassInput, setAdminPassInput] = useState("");
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+
   const isGuest = !!user?.uid.startsWith("guest_");
+  const isAdmin = !isGuest && (user?.role === "admin" || userProfile?.role === "admin" || isSystemAdminEmail(user?.email));
+  const isDeactivated = !isGuest && (userProfile?.status === "deactivated" || user?.status === "deactivated");
 
   const triggerAuthModal = useCallback((title?: string, description?: string) => {
     setAuthModalConfig({ title, description });
@@ -109,6 +158,11 @@ export default function App() {
 
   // 2. Listen to Firebase Authentication state & restore guest session if present
   useEffect(() => {
+    // Initial run to seed default admin user and sample directory
+    seedDefaultAdminAndDirectory().catch((err) =>
+      console.warn("Initial admin seed:", err)
+    );
+
     const unsubscribe = subscribeToAuth(async (fbUser) => {
       if (fbUser) {
         const authUserData: AuthUser = {
@@ -144,6 +198,16 @@ export default function App() {
           console.warn("Guest entries migration completed with notices:", migErr);
         }
 
+        // Synchronize or load Firestore user profile (role, status)
+        try {
+          const profile = await syncUserProfile(authUserData);
+          setUserProfile(profile);
+          authUserData.role = profile.role;
+          authUserData.status = profile.status;
+        } catch (profErr) {
+          console.warn("Profile sync notice:", profErr);
+        }
+
         setUser(authUserData);
         localStorage.removeItem(GUEST_SESSION_KEY);
       } else {
@@ -151,14 +215,26 @@ export default function App() {
         try {
           const storedGuest = localStorage.getItem(GUEST_SESSION_KEY);
           if (storedGuest) {
-            setUser(JSON.parse(storedGuest));
+            const parsedGuest = JSON.parse(storedGuest);
+            setUser(parsedGuest);
+            setUserProfile({
+              uid: parsedGuest.uid,
+              email: "guest@geminijournal.app",
+              displayName: "Guest Explorer",
+              role: "user",
+              status: "active",
+              createdAt: Date.now(),
+              lastLoginAt: Date.now(),
+            });
           } else {
             setUser(null);
+            setUserProfile(null);
             setActiveEntry(null);
             setEntries([]);
           }
         } catch (e) {
           setUser(null);
+          setUserProfile(null);
           setActiveEntry(null);
           setEntries([]);
         }
@@ -194,6 +270,10 @@ export default function App() {
         }
       },
       (err) => {
+        if (err?.message?.includes("insufficient permissions") || (err as any)?.code === "permission-denied") {
+          console.warn("User entries subscription awaiting permission sync:", err.message);
+          return;
+        }
         console.error("Failed to load user entries:", err);
         setErrorMessage("Could not synchronize entries.");
       }
@@ -575,6 +655,204 @@ export default function App() {
   const currentGuestIndex = entries.findIndex((e) => e.id === activeEntry?.id);
   const activeGuestEntryIndex = currentGuestIndex >= 0 ? currentGuestIndex + 1 : Math.min(entries.length + 1, MAX_GUEST_ENTRIES);
 
+  // Dedicated /admin Route Handling
+  if (isAdminRoute) {
+    if (user && isAdmin) {
+      return (
+        <AdminLayout
+          currentUser={user}
+          activeRoute={adminSubRoute}
+          onRouteChange={(r) => navigate(`/admin/${r}`)}
+          onBackToJournal={() => navigate("/")}
+        />
+      );
+    }
+
+    if (user && !isAdmin) {
+      return (
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex items-center justify-center p-4 font-sans">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-6 shadow-xl">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto border border-amber-200 dark:border-amber-800">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Admin Access Restricted</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Your account ({user.email}) does not have administrative permissions for this portal.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                id="btn-admin-return-home"
+                onClick={() => navigate("/")}
+                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Return to Reflection Journal
+              </button>
+              <button
+                id="btn-admin-switch-account"
+                onClick={handleSignOut}
+                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-4 h-4" /> Sign In with Admin Account
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Unauthenticated user attempting to access /admin
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-xl space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-sm">
+              <Shield className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Admin Portal Gateway</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Restricted Access & Governance</p>
+            </div>
+          </div>
+
+          {/* Secret Manager Governance Badge */}
+          <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 flex items-center gap-2.5 text-xs text-purple-900 dark:text-purple-200">
+            <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+            <div className="text-[11px] leading-relaxed">
+              <span className="font-semibold">Secret Manager Enabled: </span>
+              <span>Credentials and tokens are secured via Google Cloud Secret Manager.</span>
+            </div>
+          </div>
+
+          {/* Secure Admin Credentials Login Form */}
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const email = adminEmailInput.trim();
+              const pass = adminPassInput;
+              if (!email) {
+                setAdminLoginError("Please enter your administrator email.");
+                return;
+              }
+              if (!pass) {
+                setAdminLoginError("Please enter your administrator password.");
+                return;
+              }
+              setAdminLoginLoading(true);
+              setAdminLoginError(null);
+              try {
+                // 1. First attempt standard Firebase Auth
+                try {
+                  await handleEmailSignIn(email, pass);
+                  return;
+                } catch {
+                  // If standard Firebase auth fails, verify against backend Secret Manager
+                }
+
+                // 2. Fallback to server-side Secret Manager verification
+                const verifyRes = await verifyAdminWithBackend(email, pass);
+                if (verifyRes.authorized) {
+                  const adminUser: AuthUser = {
+                    uid: "admin_default_master",
+                    email: email,
+                    displayName: verifyRes.displayName || "System Administrator",
+                    photoURL: null,
+                    role: "admin",
+                  };
+                  setUser(adminUser);
+                  const profile = await syncUserProfile(adminUser);
+                  setUserProfile(profile);
+                } else {
+                  setAdminLoginError(verifyRes.error || "Invalid administrator credentials. Access denied.");
+                }
+              } catch (err: any) {
+                setAdminLoginError(err?.message || "Sign in failed. Verify your credentials.");
+              } finally {
+                setAdminLoginLoading(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            {adminLoginError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                <span>{adminLoginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Administrator Email
+              </label>
+              <input
+                id="input-admin-gateway-email"
+                type="email"
+                required
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
+                placeholder="admin@yourdomain.com"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Administrator Password
+              </label>
+              <input
+                id="input-admin-gateway-password"
+                type="password"
+                required
+                value={adminPassInput}
+                onChange={(e) => setAdminPassInput(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              />
+            </div>
+
+            <button
+              id="btn-admin-gateway-submit"
+              type="submit"
+              disabled={adminLoginLoading}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-xs hover:shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {adminLoginLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Verifying Credentials...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In to Admin Portal</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              id="btn-admin-google-signin"
+              onClick={handleSignIn}
+              className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              Sign in with Google (Authorized Admins)
+            </button>
+            <button
+              id="btn-admin-portal-back"
+              onClick={() => navigate("/")}
+              className="w-full py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Return to Reflection Journal
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-200">
       {/* Top Navigation */}
@@ -584,6 +862,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         isGuest={isGuest}
+        isAdmin={isAdmin}
         guestEntryCount={entries.length}
         maxGuestEntries={MAX_GUEST_ENTRIES}
         onOpenAuthModal={triggerAuthModal}
@@ -592,6 +871,8 @@ export default function App() {
         onToggleHistory={() => setIsHistoryOpen((prev) => !prev)}
         isHistoryOpen={isHistoryOpen}
         onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenWeeklyDigest={() => setIsWeeklyDigestOpen(true)}
+        onOpenAdminPanel={() => navigate("/admin/dashboard")}
         saveStatus={saveStatus}
         onRetrySave={() => activeEntry && persistEntry(activeEntry)}
         onToggleWalkthrough={() => setIsWalkthroughOpen((prev) => !prev)}
@@ -611,6 +892,40 @@ export default function App() {
             isLoading={authLoading}
             errorMessage={authError}
           />
+        ) : isDeactivated ? (
+          /* Deactivated User Account Notice */
+          <div className="max-w-2xl mx-auto py-16 px-6 text-center space-y-6 animate-in fade-in duration-300">
+            <div className="w-16 h-16 rounded-3xl bg-rose-50 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-800 shadow-xl shadow-rose-500/10">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800">
+                Account Status: Deactivated
+              </span>
+              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                Your Account Has Been Deactivated
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                An administrator has temporarily deactivated your account ({user.email}). You cannot create or modify reflections while deactivated.
+              </p>
+              {userProfile?.deactivationReason && (
+                <div className="mt-3 p-3 bg-rose-50/50 dark:bg-rose-950/30 rounded-xl border border-rose-200/60 dark:border-rose-900/60 text-xs text-rose-700 dark:text-rose-300 italic max-w-md mx-auto">
+                  Note: {userProfile.deactivationReason}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 flex items-center justify-center gap-3">
+              <button
+                id="btn-deactivated-sign-out"
+                onClick={handleSignOut}
+                className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" /> Sign Out
+              </button>
+            </div>
+          </div>
         ) : activeEntry ? (
           <JournalEditor
             user={user}
@@ -671,8 +986,24 @@ export default function App() {
           onSignOut={handleSignOut}
           onProfileUpdated={(updated) => setUser(updated)}
           onRequireAuth={triggerAuthModal}
+          onOpenWeeklyDigest={() => setIsWeeklyDigestOpen(true)}
         />
       )}
+
+      {/* Weekly Journal Digest Modal (Saturday Automated Dispatch & Preview) */}
+      <WeeklyDigestModal
+        isOpen={isWeeklyDigestOpen}
+        onClose={() => setIsWeeklyDigestOpen(false)}
+        user={user}
+        entries={entries}
+        isGuest={isGuest}
+        onRequireAuth={() =>
+          triggerAuthModal(
+            "Sign In for Saturday Email Digests",
+            "Sign in with Google or Email to receive your weekly reflection synthesis email newsletter every Saturday."
+          )
+        }
+      />
 
       {/* Auth Upgrade Modal for Guest Feature Gating */}
       <AuthModal
@@ -684,6 +1015,15 @@ export default function App() {
         title={authModalConfig.title}
         description={authModalConfig.description}
       />
+
+      {/* Admin Panel Modal (User Directory, Activation/Deactivation, Auditing) */}
+      {user && isAdmin && (
+        <AdminPanelModal
+          isOpen={isAdminPanelOpen}
+          onClose={() => setIsAdminPanelOpen(false)}
+          currentUser={user}
+        />
+      )}
 
       {/* Verification Walkthrough Modal */}
       <WalkthroughGuide

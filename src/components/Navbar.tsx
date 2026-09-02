@@ -12,7 +12,8 @@ import {
   Sun,
   Moon,
   User as UserIcon,
-  Flame
+  Flame,
+  ShieldCheck
 } from "lucide-react";
 
 interface NavbarProps {
@@ -21,6 +22,7 @@ interface NavbarProps {
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
   isGuest?: boolean;
+  isAdmin?: boolean;
   guestEntryCount?: number;
   maxGuestEntries?: number;
   onOpenAuthModal?: (title?: string, description?: string) => void;
@@ -29,6 +31,8 @@ interface NavbarProps {
   onToggleHistory: () => void;
   isHistoryOpen: boolean;
   onOpenProfile: () => void;
+  onOpenWeeklyDigest?: () => void;
+  onOpenAdminPanel?: () => void;
   saveStatus: SaveStatus;
   onRetrySave?: () => void;
   onToggleWalkthrough: () => void;
@@ -42,6 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme = "light",
   onToggleTheme,
   isGuest = false,
+  isAdmin = false,
   guestEntryCount = 1,
   maxGuestEntries = 2,
   onOpenAuthModal,
@@ -50,6 +55,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleHistory,
   isHistoryOpen,
   onOpenProfile,
+  onOpenWeeklyDigest,
+  onOpenAdminPanel,
   saveStatus,
   onRetrySave,
   onToggleWalkthrough,
@@ -142,6 +149,36 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </button>
             )}
+
+            {/* Admin Portal Button */}
+            {isAdmin && onOpenAdminPanel && (
+              <button
+                id="btn-nav-admin-panel"
+                onClick={onOpenAdminPanel}
+                title="System Admin Portal - Manage Users & Security"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/60"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Admin</span>
+              </button>
+            )}
+
+            {/* Weekly Saturday Digest Button */}
+            {onOpenWeeklyDigest && (
+              <button
+                id="btn-nav-weekly-digest"
+                onClick={onOpenWeeklyDigest}
+                title="Weekly Journal Digest (Sent Every Saturday)"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs bg-indigo-50/90 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="hidden md:inline">Weekly Digest</span>
+                <span className="px-1.5 py-0.2 rounded-md bg-indigo-200/70 dark:bg-indigo-800/80 text-[10px] font-bold text-indigo-800 dark:text-indigo-200">
+                  Sat
+                </span>
+              </button>
+            )}
+
 
             {isGuest && (
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">

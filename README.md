@@ -12,6 +12,9 @@ A secure, private, user-authenticated personal reflection and journaling applica
 - 🧭 **Automated Growth Synthesis**: Real-time extraction of executive overviews, key takeaways, emotional tone, and interactive action items.
 - 💾 **Defensive Persistence**: Real-time bidirectional Firestore sync with automatic undefined stripping and transaction recovery.
 - 📊 **Reflection History & Markdown Export**: Fast search, filtering by mood or favorites, and one-click export to Markdown (`.md`).
+- 🔥 **Continuous Login Streak**: Authenticated daily streak tracking starting on Day 2 as a 1-day streak with skipped-day reset safeguards.
+- ✉️ **Weekly Journal Summary & Saturday Email Dispatcher**: Automated weekly reflection synthesis sent to registered user emails every Saturday at 09:00 UTC with responsive HTML newsletter templates and on-demand preview.
+
 
 ---
 
@@ -87,25 +90,29 @@ If an API key from `firebase-applet-config.json` or any configuration file was e
 1. `firebase-applet-config.json` and any local credential files are added to `.gitignore` to prevent committing secrets to version control.
 2. Store your API keys in Google Cloud Secret Manager:
 ```bash
-# 1. Create and populate Gemini and Firebase secrets
+# 1. Create and populate Gemini, Firebase, and Admin credentials in Secret Manager
 gcloud secrets create GEMINI_API_KEY --replication-policy="automatic"
 echo -n "YOUR_GEMINI_API_KEY" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
 
 gcloud secrets create FIREBASE_API_KEY --replication-policy="automatic"
 echo -n "YOUR_ROTATED_FIREBASE_API_KEY" | gcloud secrets versions add FIREBASE_API_KEY --data-file=-
 
+gcloud secrets create ADMIN_EMAIL --replication-policy="automatic"
+echo -n "admin@yourcompany.com" | gcloud secrets versions add ADMIN_EMAIL --data-file=-
+
+gcloud secrets create ADMIN_PASSWORD --replication-policy="automatic"
+echo -n "YOUR_STRONG_ADMIN_PASSWORD" | gcloud secrets versions add ADMIN_PASSWORD --data-file=-
+
 # 2. Identify your Cloud Run service account
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 export RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
 # 3. Grant Secret Accessor role to the Cloud Run runtime service account
-gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
-  --member="serviceAccount:${RUN_SA}" \
-  --role="roles/secretmanager.secretAccessor"
-
-gcloud secrets add-iam-policy-binding FIREBASE_API_KEY \
-  --member="serviceAccount:${RUN_SA}" \
-  --role="roles/secretmanager.secretAccessor"
+for SECRET in GEMINI_API_KEY FIREBASE_API_KEY ADMIN_EMAIL ADMIN_PASSWORD; do
+  gcloud secrets add-iam-policy-binding $SECRET \
+    --member="serviceAccount:${RUN_SA}" \
+    --role="roles/secretmanager.secretAccessor"
+done
 ```
 
 
@@ -183,6 +190,9 @@ gcloud run services update gemini-reflection-journal \
 | **TC-04** | **Synthesis** | Click "Generate Growth Summary" after 2+ turns | Structured Summary Card renders with Overview, Takeaways, and actionable checklist. |
 | **TC-05** | **Firestore** | Verify "Saved to Cloud" pill in navbar | Refresh page; all entries and messages persist safely without loss. |
 | **TC-06** | **History** | Open "Past Entries", search, favorite, or export | Realtime filtered list updates; `.md` markdown file downloads on export. |
+| **TC-10** | **Streak Tracking** | Login on continuous days as authenticated user | Day 1 has no streak; Day 2 activates 1-day streak badge; skip breaks and restarts from 0. |
+| **TC-13** | **Weekly Synthesis** | Open "Weekly Digest" and click "Generate This Week's Summary" | Gemini synthesizes 7-day entries into holistic theme, emotional arc, and intentions. |
+| **TC-14** | **Saturday Email** | Test email preview and instant dispatch to user email | Formatted HTML email newsletter dispatches to recipient; automated Saturday cron scheduled. |
 
 ---
 

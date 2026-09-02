@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile, role, and activation status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "status": { "type": "string", "enum": ["active", "deactivated"] },
+        "createdAt": { "type": "number" },
+        "lastLoginAt": { "type": "number" },
+        "deactivatedAt": { "type": "number" },
+        "deactivatedBy": { "type": "string" },
+        "deactivationReason": { "type": "string" }
+      },
+      "required": ["uid", "email", "role", "status", "createdAt"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "User journal reflection entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "title", "createdAt", "updatedAt"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "Audit trail of admin operations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "targetUid": { "type": "string" },
+        "targetEmail": { "type": "string" },
+        "action": { "type": "string", "enum": ["activate", "deactivate", "role_change", "user_created"] },
+        "details": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "adminUid", "adminEmail", "targetUid", "targetEmail", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account document"
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "User reflections subcollection"
+    },
+    "/admin_audit_logs/{logId}": {
+      "schema": "AdminAuditLog",
+      "description": "Immutable log of administrative actions"
+    },
+    "/admins/{adminId}": {
+      "schema": "UserProfile",
+      "description": "Admin authorization reference marker"
+    }
+  }
+}

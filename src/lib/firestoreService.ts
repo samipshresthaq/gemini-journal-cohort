@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   Unsubscribe
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { JournalEntry, JournalMessage, ReflectionSummary } from "../types";
 
 /**
@@ -67,8 +67,8 @@ export async function saveJournalEntry(userId: string, entry: JournalEntry): Pro
     throw new Error("Entry ID is required.");
   }
 
-  // Handle Guest Mode locally
-  if (userId.startsWith("guest_")) {
+  // Handle Guest Mode locally or unauthenticated session fallback
+  if (userId.startsWith("guest_") || !auth.currentUser || auth.currentUser.uid !== userId) {
     const entries = getGuestEntries(userId);
     const updatedEntry = {
       ...entry,
@@ -82,17 +82,32 @@ export async function saveJournalEntry(userId: string, entry: JournalEntry): Pro
       entries.unshift(updatedEntry);
     }
     saveGuestEntries(userId, entries);
-    return;
+    
+    if (!auth.currentUser || auth.currentUser.uid !== userId) {
+      return;
+    }
   }
 
-  const entryRef = doc(db, "users", userId, "entries", entry.id);
-  const sanitized = sanitizeForFirestore({
-    ...entry,
-    userId,
-    updatedAt: Date.now(),
-  });
+  try {
+    const entryRef = doc(db, "users", userId, "entries", entry.id);
+    const sanitized = sanitizeForFirestore({
+      ...entry,
+      userId,
+      updatedAt: Date.now(),
+    });
 
-  await setDoc(entryRef, sanitized, { merge: true });
+    await setDoc(entryRef, sanitized, { merge: true });
+  } catch (err) {
+    console.warn("Notice: Firestore entry save fallback to local:", err);
+    const entries = getGuestEntries(userId);
+    const index = entries.findIndex((e) => e.id === entry.id);
+    if (index >= 0) {
+      entries[index] = { ...entry, userId, updatedAt: Date.now() };
+    } else {
+      entries.unshift({ ...entry, userId, updatedAt: Date.now() });
+    }
+    saveGuestEntries(userId, entries);
+  }
 }
 
 /**
@@ -108,8 +123,8 @@ export function subscribeToUserEntries(
     return () => {};
   }
 
-  // Handle Guest Mode with event-driven local subscriptions
-  if (userId.startsWith("guest_")) {
+  // Handle Guest Mode or unauthenticated session with event-driven local subscriptions
+  if (userId.startsWith("guest_") || !auth.currentUser || auth.currentUser.uid !== userId) {
     const initialTimer = setTimeout(() => {
       onUpdate(getGuestEntries(userId));
     }, 0);
@@ -157,6 +172,11 @@ export function subscribeToUserEntries(
       onUpdate(entries);
     },
     (err) => {
+      if (err?.code === "permission-denied" || err?.message?.includes("insufficient permissions")) {
+        console.warn("Firestore subscription waiting for authentication sync:", err.message);
+        onUpdate(getGuestEntries(userId));
+        return;
+      }
       console.error("[Firestore Error] Failed to subscribe to entries:", err);
       onError(err);
     }
