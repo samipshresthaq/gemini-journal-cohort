@@ -507,7 +507,8 @@ export async function adminCreateUser(
   email: string,
   displayName: string,
   role: UserRole = "user",
-  status: UserAccountStatus = "active"
+  status: UserAccountStatus = "active",
+  weeklyDigestEnabled: boolean = true
 ): Promise<UserProfile> {
   if (!adminUser || !adminUser.uid) {
     throw new Error("Administrative authorization required.");
@@ -527,9 +528,22 @@ export async function adminCreateUser(
     createdAt: Date.now(),
     lastLoginAt: Date.now(),
     entryCount: 0,
+    weeklyDigestEnabled,
   };
 
   await setDoc(doc(db, "users", newUid), sanitizeForFirestore(newProfile), { merge: true });
+
+  // Initialize weekly digest settings subcollection
+  try {
+    await setDoc(doc(db, "users", newUid, "profile", "digest_settings"), {
+      enabled: weeklyDigestEnabled,
+      deliveryDay: "saturday",
+      deliveryHourUtc: 9,
+      updatedAt: Date.now(),
+    }, { merge: true });
+  } catch (err) {
+    console.warn("Could not bootstrap digest settings for new user:", err);
+  }
 
   if (role === "admin") {
     await setDoc(doc(db, "admins", newUid), {
@@ -547,10 +561,61 @@ export async function adminCreateUser(
     targetUid: newUid,
     targetEmail: email,
     action: "user_created",
-    details: `Created user ${email} with role: ${role} and status: ${status}`,
+    details: `Created user ${email} (Role: ${role}, Status: ${status}, Digest: ${weeklyDigestEnabled ? "Subscribed" : "Unsubscribed"})`,
   });
 
   return newProfile;
+}
+
+/**
+ * Toggle weekly digest email subscription for any user from the admin console
+ */
+export async function adminToggleUserDigestSubscription(
+  adminUser: AuthUser,
+  targetUid: string,
+  targetEmail: string,
+  newEnabledState: boolean
+): Promise<void> {
+  if (!adminUser || !adminUser.uid) {
+    throw new Error("Administrative authorization required.");
+  }
+  if (!targetUid) {
+    throw new Error("Target user ID is required.");
+  }
+
+  const userRef = doc(db, "users", targetUid);
+  await setDoc(userRef, { weeklyDigestEnabled: newEnabledState }, { merge: true });
+
+  const digestSettingsRef = doc(db, "users", targetUid, "profile", "digest_settings");
+  await setDoc(digestSettingsRef, {
+    enabled: newEnabledState,
+    deliveryDay: "saturday",
+    deliveryHourUtc: 9,
+    updatedAt: Date.now(),
+    updatedByAdmin: adminUser.email || adminUser.uid,
+  }, { merge: true });
+
+  // Sync to server-side preferences store
+  try {
+    fetch("/api/digest/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: targetUid,
+        email: targetEmail,
+        subscribed: newEnabledState,
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+
+  await logAdminAuditAction({
+    adminUid: adminUser.uid,
+    adminEmail: adminUser.email || "admin",
+    targetUid,
+    targetEmail,
+    action: "digest_subscription_change",
+    details: `Weekly Saturday digest mail subscription toggled ${newEnabledState ? "ON (Subscribed)" : "OFF (Unsubscribed)"}`,
+  });
 }
 
 /**
@@ -561,7 +626,7 @@ export async function logAdminAuditAction(params: {
   adminEmail: string;
   targetUid: string;
   targetEmail: string;
-  action: "activate" | "deactivate" | "role_change" | "user_created";
+  action: "activate" | "deactivate" | "role_change" | "user_created" | "digest_subscription_change";
   details?: string;
 }): Promise<void> {
   try {

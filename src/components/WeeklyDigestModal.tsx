@@ -16,7 +16,10 @@ import {
   ChevronRight,
   Flame,
   ArrowRight,
-  Check
+  Check,
+  MailX,
+  BellOff,
+  Settings
 } from "lucide-react";
 import { AuthUser, JournalEntry, WeeklyDigest, WeeklyDigestSettings } from "../types";
 import {
@@ -27,6 +30,8 @@ import {
   subscribeToUserDigests,
   getDigestSettings,
   saveDigestSettings,
+  subscribeToDigestSettings,
+  toggleUserDigestSubscription,
   getWeekDateRange
 } from "../lib/digestService";
 import { getGoogleAccessToken, authorizeGmailAccess } from "../firebase";
@@ -70,16 +75,45 @@ export const WeeklyDigestModal: React.FC<WeeklyDigestModalProps> = ({
   useEffect(() => {
     if (!isOpen || !user || isGuest) return;
 
-    // Load settings
-    getDigestSettings(user.uid).then((s) => setSettings(s));
+    // Real-time subscribe to settings
+    const unsubSettings = subscribeToDigestSettings(user.uid, (s) => {
+      setSettings(s);
+    });
 
     // Subscribe to past digests
-    const unsub = subscribeToUserDigests(user.uid, (list) => {
+    const unsubDigests = subscribeToUserDigests(user.uid, (list) => {
       setPastDigests(list);
     });
 
-    return () => unsub();
+    return () => {
+      unsubSettings();
+      unsubDigests();
+    };
   }, [isOpen, user, isGuest]);
+
+  // Handle subscription preference toggle
+  const handleToggleSubscription = async () => {
+    if (!user || isGuest) return;
+    setSavingSettings(true);
+    setError(null);
+    try {
+      const nextState = !settings.enabled;
+      await saveDigestSettings(user.uid, { enabled: nextState });
+      setSettings((prev) => ({ ...prev, enabled: nextState }));
+      setSendStatus({
+        success: true,
+        message: nextState
+          ? "Weekly email digest subscription is now ON. You will receive syntheses every Saturday!"
+          : "Weekly email digest subscription is now PAUSED. Automated emails will not be sent.",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      });
+      setTimeout(() => setSendStatus(null), 5000);
+    } catch (err: any) {
+      setError(err.message || "Failed to update subscription preference.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -160,6 +194,14 @@ export const WeeklyDigestModal: React.FC<WeeklyDigestModalProps> = ({
     setSendStatus(null);
 
     const userName = user.displayName || user.email?.split("@")[0] || "Writer";
+
+    // Subscription preference enforcement
+    if (settings.enabled === false) {
+      setError(
+        "Weekly digest email subscription is currently turned off for your account. Please enable the subscription using the toggle above or in Subscription Settings before dispatching emails."
+      );
+      return;
+    }
 
     try {
       if (type === "gmail") {
@@ -309,10 +351,88 @@ export const WeeklyDigestModal: React.FC<WeeklyDigestModalProps> = ({
           >
             <History className="w-3.5 h-3.5" /> Past Saturday Digests ({pastDigests.length})
           </button>
+
+          <button
+            id="tab-digest-settings"
+            onClick={() => setActiveTab("settings")}
+            className={`pb-3 px-3 border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              activeTab === "settings"
+                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5" /> Subscription Settings
+          </button>
         </div>
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+          
+          {/* Real-time Email Subscription Preference Banner */}
+          <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  settings.enabled
+                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                {settings.enabled ? <Mail className="w-5 h-5" /> : <MailX className="w-5 h-5" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Weekly Digest Mail Subscription
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
+                      settings.enabled
+                        ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600"
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${settings.enabled ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+                    {settings.enabled ? "Subscribed (Active)" : "Paused / Unsubscribed"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {settings.enabled
+                    ? `Automated reflection digests are scheduled for delivery to ${settings.customEmail || user.email} every Saturday at 9:00 AM UTC.`
+                    : "Weekly digest mail is paused. Automated emails will not be sent to your inbox until re-enabled."}
+                </p>
+              </div>
+            </div>
+
+            <button
+              id="btn-toggle-digest-subscription"
+              type="button"
+              disabled={savingSettings}
+              onClick={handleToggleSubscription}
+              className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+                settings.enabled
+                  ? "bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              }`}
+            >
+              {savingSettings ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Updating...</span>
+                </>
+              ) : settings.enabled ? (
+                <>
+                  <BellOff className="w-3.5 h-3.5" />
+                  <span>Pause Subscription</span>
+                </>
+              ) : (
+                <>
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Subscribe to Digest</span>
+                </>
+              )}
+            </button>
+          </div>
           
           {/* Status Banners */}
           {error && (
@@ -624,6 +744,99 @@ export const WeeklyDigestModal: React.FC<WeeklyDigestModalProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 4: Subscription & Delivery Preferences */}
+          {activeTab === "settings" && (
+            <div className="space-y-6">
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                      Weekly Reflection Digest Subscription
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Configure your automated Saturday synthesis delivery preferences
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                      settings.enabled
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                        : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {settings.enabled ? "Currently Subscribed" : "Subscription Inactive"}
+                  </span>
+                </div>
+
+                {/* Main Toggle Row */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <div className="space-y-0.5 max-w-md">
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Email Delivery Toggle</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      When enabled, Gemini synthesizes your weekly journal reflections and delivers a personalized newsletter directly to your inbox every Saturday at 9:00 AM UTC.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={settings.enabled}
+                    disabled={savingSettings}
+                    onClick={handleToggleSubscription}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                      settings.enabled ? "bg-emerald-600" : "bg-slate-300 dark:bg-slate-700"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        settings.enabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Delivery Target Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 space-y-1">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                      Primary Recipient
+                    </span>
+                    <div className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                      {settings.customEmail || user.email}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Verified Google OAuth account email
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 space-y-1">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                      Delivery Schedule
+                    </span>
+                    <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                      Every Saturday • 09:00 UTC
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Compiled from entries in the preceding 7 days
+                    </div>
+                  </div>
+                </div>
+
+                {/* Note about on-demand generation */}
+                <div className="p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/60 text-[11px] text-indigo-900 dark:text-indigo-200 flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600 dark:text-indigo-400" />
+                  <div>
+                    <strong>On-Demand Generation:</strong> Even when automated email subscription is paused, you can still view and manually generate weekly syntheses anytime from the <em>This Week's Synthesis</em> tab.
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

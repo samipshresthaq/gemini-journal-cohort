@@ -23,6 +23,7 @@ import {
   FileText,
   Sun,
   Moon,
+  MailX,
 } from "lucide-react";
 import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus, DeactivationAppeal } from "../types";
 import { 
@@ -30,6 +31,7 @@ import {
   setUserAccountStatus,
   setUserRole,
   adminCreateUser,
+  adminToggleUserDigestSubscription,
   subscribeToAdminAuditLogs,
   subscribeToAppeals,
 } from "../lib/adminService";
@@ -106,6 +108,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("user");
   const [newStatus, setNewStatus] = useState<UserAccountStatus>("active");
+  const [newWeeklyDigestEnabled, setNewWeeklyDigestEnabled] = useState(true);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   // Status feedback toast
@@ -225,6 +228,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
+  const handleToggleDigestSubscription = async (targetUser: UserProfile) => {
+    const nextSubscribed = targetUser.weeklyDigestEnabled === false ? true : false;
+    setIsProcessingAction(true);
+    setActionErrorMessage(null);
+    setActionSuccessMessage(null);
+
+    try {
+      await adminToggleUserDigestSubscription(
+        currentUser,
+        targetUser.uid,
+        targetUser.email,
+        nextSubscribed
+      );
+      targetUser.weeklyDigestEnabled = nextSubscribed;
+      setActionSuccessMessage(
+        `Weekly digest email for ${targetUser.email || targetUser.displayName || targetUser.uid} updated to ${
+          nextSubscribed ? "Subscribed" : "Paused"
+        }.`
+      );
+      setTimeout(() => setActionSuccessMessage(null), 3500);
+    } catch (err: any) {
+      setActionErrorMessage(err.message || "Failed to update digest subscription preference.");
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
   const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail || !newEmail.includes("@")) {
@@ -237,12 +267,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setActionSuccessMessage(null);
 
     try {
-      await adminCreateUser(currentUser, newEmail, newName, newRole, newStatus);
+      await adminCreateUser(currentUser, newEmail, newName, newRole, newStatus, newWeeklyDigestEnabled);
       setActionSuccessMessage(`User ${newEmail} created and added to directory!`);
       setNewEmail("");
       setNewName("");
       setNewRole("user");
       setNewStatus("active");
+      setNewWeeklyDigestEnabled(true);
       setActiveTab("users");
       setTimeout(() => setActionSuccessMessage(null), 4000);
     } catch (err: any) {
@@ -572,6 +603,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           <th className="p-3.5 pl-4">User Details</th>
                           <th className="p-3.5">Role</th>
                           <th className="p-3.5">Account Status</th>
+                          <th className="p-3.5">Weekly Digest</th>
                           <th className="p-3.5 hidden md:table-cell">Created / Last Login</th>
                           <th className="p-3.5 text-right pr-4">Admin Actions</th>
                         </tr>
@@ -661,6 +693,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                     </p>
                                   )}
                                 </div>
+                              </td>
+
+                              {/* Weekly Digest Subscription Toggle */}
+                              <td className="p-3.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleDigestSubscription(u)}
+                                  disabled={isProcessingAction}
+                                  title={`Click to toggle Saturday weekly digest email for ${u.email || u.displayName}`}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 ${
+                                    u.weeklyDigestEnabled !== false
+                                      ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100"
+                                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200"
+                                  }`}
+                                >
+                                  {u.weeklyDigestEnabled !== false ? (
+                                    <>
+                                      <Mail className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                      <span>Subscribed</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MailX className="w-3 h-3 text-slate-400" />
+                                      <span>Off</span>
+                                    </>
+                                  )}
+                                </button>
                               </td>
 
                               {/* Dates */}
@@ -788,6 +847,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <option value="deactivated">Deactivated</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Digest Subscription Option */}
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800">
+                  <input
+                    id="input-create-digest-opt"
+                    type="checkbox"
+                    checked={newWeeklyDigestEnabled}
+                    onChange={(e) => setNewWeeklyDigestEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label
+                    htmlFor="input-create-digest-opt"
+                    className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer select-none"
+                  >
+                    Subscribe user to Saturday Weekly Journal Digest emails
+                  </label>
                 </div>
 
                 <button

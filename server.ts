@@ -623,11 +623,54 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
     }
   });
 
+  // User digest subscription preference cache
+  const digestSubscriptionMap = new Map<string, boolean>();
+
+  // Query subscription status
+  app.get("/api/digest/preferences", (req: Request, res: Response) => {
+    const email = (req.query.email as string)?.toLowerCase().trim();
+    const userId = (req.query.userId as string)?.trim();
+
+    let isSubscribed = true;
+    if (userId && digestSubscriptionMap.has(`uid:${userId}`)) {
+      isSubscribed = digestSubscriptionMap.get(`uid:${userId}`)!;
+    } else if (email && digestSubscriptionMap.has(`email:${email}`)) {
+      isSubscribed = digestSubscriptionMap.get(`email:${email}`)!;
+    }
+
+    res.json({
+      userId,
+      email,
+      subscribed: isSubscribed,
+    });
+  });
+
+  // Update subscription preference
+  app.post("/api/digest/preferences", (req: Request, res: Response) => {
+    const { userId, email, subscribed } = req.body || {};
+    const newStatus = typeof subscribed === "boolean" ? subscribed : true;
+
+    if (userId) {
+      digestSubscriptionMap.set(`uid:${userId}`, newStatus);
+    }
+    if (email && typeof email === "string") {
+      digestSubscriptionMap.set(`email:${email.toLowerCase().trim()}`, newStatus);
+    }
+
+    console.log(`[Digest Preference] Updated subscription for ${userId || email} -> ${newStatus ? "SUBSCRIBED" : "UNSUBSCRIBED"}`);
+    res.json({
+      success: true,
+      userId,
+      email,
+      subscribed: newStatus,
+    });
+  });
+
   // Send Weekly Journal Digest to User Email
   app.post("/api/digest/send", aiInferenceLimiter, async (req: Request, res: Response) => {
     try {
       const body = (req.body && typeof req.body === "object") ? req.body : {};
-      const { userEmail, userName, digest } = body;
+      const { userEmail, userName, digest, userId, isSubscribed } = body;
 
       if (!userEmail || typeof userEmail !== "string" || !userEmail.includes("@")) {
         res.status(400).json({ error: "A valid user email address is required." });
@@ -636,6 +679,31 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
 
       if (!digest || typeof digest !== "object") {
         res.status(400).json({ error: "Digest payload object is required." });
+        return;
+      }
+
+      // Check subscription preference before dispatching
+      const normalizedEmail = userEmail.toLowerCase().trim();
+      let userIsSubscribed = true;
+
+      if (isSubscribed !== undefined) {
+        userIsSubscribed = Boolean(isSubscribed);
+      } else if (userId && digestSubscriptionMap.has(`uid:${userId}`)) {
+        userIsSubscribed = digestSubscriptionMap.get(`uid:${userId}`)!;
+      } else if (digestSubscriptionMap.has(`email:${normalizedEmail}`)) {
+        userIsSubscribed = digestSubscriptionMap.get(`email:${normalizedEmail}`)!;
+      } else if (digest && digest.isSubscribed !== undefined) {
+        userIsSubscribed = Boolean(digest.isSubscribed);
+      }
+
+      if (!userIsSubscribed) {
+        console.warn(`[Digest Dispatcher] Blocked digest dispatch to ${userEmail} because weekly digest mail subscription is toggled OFF.`);
+        res.status(403).json({
+          success: false,
+          skipped: true,
+          error: `Weekly digest mail subscription is disabled for ${userEmail}. Email was not sent.`,
+          isSubscribed: false,
+        });
         return;
       }
 
@@ -725,11 +793,13 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
   // Automated Saturday Cron Dispatcher Trigger / Health Check Endpoint
   app.post("/api/digest/trigger-cron", async (_req: Request, res: Response) => {
     console.log("[Saturday Cron] Manual or automated Saturday digest sweep initiated at:", new Date().toISOString());
+    const optOutCount = Array.from(digestSubscriptionMap.values()).filter(v => v === false).length;
     res.json({
       status: "ok",
       cronSchedule: "Every Saturday at 09:00 AM UTC (0 9 * * 6)",
       nextSaturday: getNextSaturdayIso(),
-      message: "Saturday Weekly Digest scheduler is active.",
+      optedOutUsersCount: optOutCount,
+      message: "Saturday Weekly Digest scheduler is active with subscription preference filtering.",
     });
   });
 

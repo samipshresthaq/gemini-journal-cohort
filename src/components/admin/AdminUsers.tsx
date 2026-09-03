@@ -21,12 +21,15 @@ import {
   Shield,
   FileText,
   X,
+  MailX,
+  BellOff,
 } from "lucide-react";
 import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus, DeactivationAppeal } from "../../types";
 import {
   setUserAccountStatus,
   setUserRole,
   adminCreateUser,
+  adminToggleUserDigestSubscription,
   subscribeToAdminAuditLogs,
   subscribeToAppeals,
 } from "../../lib/adminService";
@@ -64,6 +67,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("user");
   const [newStatus, setNewStatus] = useState<UserAccountStatus>("active");
+  const [newWeeklyDigestEnabled, setNewWeeklyDigestEnabled] = useState(true);
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
@@ -198,6 +202,35 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
     }
   };
 
+  // Toggle user weekly digest subscription from admin panel
+  const handleToggleDigestSubscription = async (targetUser: UserProfile) => {
+    const nextSubscribed = targetUser.weeklyDigestEnabled === false ? true : false;
+    setIsProcessingAction(true);
+    setActionError(null);
+    setActionSuccess(null);
+
+    try {
+      await adminToggleUserDigestSubscription(
+        currentUser,
+        targetUser.uid,
+        targetUser.email,
+        nextSubscribed
+      );
+      // Optimistically update target user object
+      targetUser.weeklyDigestEnabled = nextSubscribed;
+      setActionSuccess(
+        `Weekly digest email for ${targetUser.email || targetUser.displayName || targetUser.uid} updated to ${
+          nextSubscribed ? "Subscribed (ON)" : "Paused (OFF)"
+        }.`
+      );
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: any) {
+      setActionError(err.message || "Failed to update user digest subscription preference.");
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
   // Handle user creation
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,11 +243,12 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
     setActionError(null);
 
     try {
-      await adminCreateUser(currentUser, newEmail, newName, newRole, newStatus);
+      await adminCreateUser(currentUser, newEmail, newName, newRole, newStatus, newWeeklyDigestEnabled);
       setActionSuccess(`User ${newEmail} created successfully.`);
       setIsCreateModalOpen(false);
       setNewEmail("");
       setNewName("");
+      setNewWeeklyDigestEnabled(true);
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {
       setActionError(err.message || "Failed to provision user.");
@@ -381,6 +415,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                     <th className="py-3 px-4">User</th>
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Weekly Digest</th>
                     <th className="py-3 px-4">Registered</th>
                     <th className="py-3 px-4">Last Active</th>
                     <th className="py-3 px-4 text-right">Access Controls</th>
@@ -511,6 +546,33 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                                 </button>
                               )}
                             </div>
+                          </td>
+
+                          {/* Weekly Digest Subscription Column */}
+                          <td className="py-3 px-4">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleDigestSubscription(user)}
+                              disabled={isProcessingAction}
+                              title={`Click to toggle Saturday weekly digest email for ${user.email || user.displayName}`}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer disabled:opacity-50 ${
+                                user.weeklyDigestEnabled !== false
+                                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200"
+                              }`}
+                            >
+                              {user.weeklyDigestEnabled !== false ? (
+                                <>
+                                  <Mail className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Subscribed</span>
+                                </>
+                              ) : (
+                                <>
+                                  <MailX className="w-3 h-3 text-slate-400" />
+                                  <span>Off</span>
+                                </>
+                              )}
+                            </button>
                           </td>
 
                           {/* Registered Column */}
@@ -801,6 +863,23 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                     <option value="deactivated">Deactivated</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Digest Subscription Option */}
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <input
+                  id="input-create-digest-enabled"
+                  type="checkbox"
+                  checked={newWeeklyDigestEnabled}
+                  onChange={(e) => setNewWeeklyDigestEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <label
+                  htmlFor="input-create-digest-enabled"
+                  className="text-xs text-slate-700 dark:text-slate-300 font-medium cursor-pointer select-none"
+                >
+                  Subscribe user to Saturday Weekly Journal Digest emails
+                </label>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">

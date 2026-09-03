@@ -23,6 +23,7 @@ export interface UserProfile {
   deactivatedAt?: number;
   deactivatedBy?: string;
   deactivationReason?: string;
+  weeklyDigestEnabled?: boolean; // Weekly digest email subscription preference
 }
 
 export interface AdminAuditLog {
@@ -31,7 +32,7 @@ export interface AdminAuditLog {
   adminEmail: string;
   targetUid: string;
   targetEmail: string;
-  action: 'activate' | 'deactivate' | 'role_change' | 'user_created';
+  action: 'activate' | 'deactivate' | 'role_change' | 'user_created' | 'digest_subscription_change';
   details?: string;
   timestamp: number;
 }
@@ -194,6 +195,7 @@ export interface WeeklyDigest {
   sentAt?: number;
   deliveryChannel?: string;
   rawHtml?: string;
+  isSubscribed?: boolean;
 }
 
 export interface WeeklyDigestSettings {
@@ -202,6 +204,7 @@ export interface WeeklyDigestSettings {
   deliveryHourUtc: number; // e.g. 9 for 9:00 UTC
   customEmail?: string;
   lastSentWeek?: string;
+  updatedAt?: number;
 }
 
 export type AppealStatus = 'pending' | 'reviewed' | 'approved' | 'rejected';

@@ -19,9 +19,12 @@ import {
   Calendar,
   Layers,
   Flame,
-  Zap
+  Zap,
+  MailX,
+  BellOff
 } from "lucide-react";
 import { updateUserProfile } from "../firebase";
+import { subscribeToDigestSettings, saveDigestSettings } from "../lib/digestService";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -51,6 +54,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [isSavingName, setIsSavingName] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [digestSubscribed, setDigestSubscribed] = useState<boolean>(true);
+  const [isTogglingDigest, setIsTogglingDigest] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +66,29 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       };
     }
   }, [isOpen]);
+
+  // Real-time subscribe to user's weekly digest subscription settings
+  useEffect(() => {
+    if (!isOpen || !user || user.uid.startsWith("guest_")) return;
+    const unsub = subscribeToDigestSettings(user.uid, (settings) => {
+      setDigestSubscribed(settings.enabled !== false);
+    });
+    return () => unsub();
+  }, [isOpen, user]);
+
+  const handleToggleDigestSubscription = async () => {
+    if (!user || user.uid.startsWith("guest_")) return;
+    setIsTogglingDigest(true);
+    try {
+      const nextState = !digestSubscribed;
+      await saveDigestSettings(user.uid, { enabled: nextState });
+      setDigestSubscribed(nextState);
+    } catch (err: any) {
+      console.error("Failed to toggle digest subscription in profile:", err);
+    } finally {
+      setIsTogglingDigest(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -390,46 +418,100 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Weekly Email Digest</h4>
               <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> Every Saturday
+                <Calendar className="w-3 h-3" /> Every Saturday • 09:00 UTC
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shrink-0">
-                  <Mail className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                    Saturday Journal Summary & Newsletter
+            <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 flex flex-col gap-3.5 shadow-xs">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-colors ${
+                      !isGuest && digestSubscribed
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    {!isGuest && digestSubscribed ? <Mail className="w-5 h-5" /> : <MailX className="w-5 h-5" />}
                   </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                    {isGuest
-                      ? "Weekly email summaries are exclusive to registered accounts."
-                      : `Automated weekly synthesis sent to ${user.email} every Saturday.`}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        Saturday Journal Summary & Newsletter
+                      </span>
+                      {!isGuest && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold inline-flex items-center gap-1 ${
+                            digestSubscribed
+                              ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                              : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${digestSubscribed ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+                          {digestSubscribed ? "Subscribed" : "Subscription Paused"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                      {isGuest
+                        ? "Weekly email summaries are exclusive to registered accounts."
+                        : digestSubscribed
+                        ? `AI weekly synthesis will be dispatched to ${user.email} every Saturday.`
+                        : "Automated emails paused. Re-enable anytime to resume delivery."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {!isGuest && (
+                    <button
+                      type="button"
+                      id="btn-profile-toggle-digest-subscription"
+                      disabled={isTogglingDigest}
+                      onClick={handleToggleDigestSubscription}
+                      className={`flex-1 sm:flex-none py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+                        digestSubscribed
+                          ? "bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                      }`}
+                    >
+                      {isTogglingDigest ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : digestSubscribed ? (
+                        <>
+                          <BellOff className="w-3.5 h-3.5" />
+                          <span>Pause Mail</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Subscribe</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    id="btn-profile-open-weekly-digest"
+                    onClick={() => {
+                      onClose();
+                      if (isGuest) {
+                        onRequireAuth?.(
+                          "Sign In for Saturday Email Digests",
+                          "Create a free account to receive weekly AI summaries and breakthrough insights delivered to your inbox every Saturday."
+                        );
+                      } else {
+                        onOpenWeeklyDigest?.();
+                      }
+                    }}
+                    className="flex-1 sm:flex-none py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isGuest ? "Unlock Saturday Digests" : "Open Weekly Digest"}</span>
+                  </button>
                 </div>
               </div>
-
-              <button
-                type="button"
-                id="btn-profile-open-weekly-digest"
-                onClick={() => {
-                  onClose();
-                  if (isGuest) {
-                    onRequireAuth?.(
-                      "Sign In for Saturday Email Digests",
-                      "Create a free account to receive weekly AI summaries and breakthrough insights delivered to your inbox every Saturday."
-                    );
-                  } else {
-                    onOpenWeeklyDigest?.();
-                  }
-                }}
-                className="w-full sm:w-auto py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{isGuest ? "Unlock Saturday Digests" : "Open Weekly Digest"}</span>
-              </button>
             </div>
           </div>
 

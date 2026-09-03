@@ -211,6 +211,14 @@ export async function sendDigestViaGmailApi(
     throw new Error("A valid recipient email address is required.");
   }
 
+  // Check subscription preference before sending
+  const subscriptionSettings = await getDigestSettings(digest.userId);
+  if (subscriptionSettings.enabled === false) {
+    throw new Error(
+      `Weekly digest email subscription is currently paused/off for ${digest.userEmail}. Please enable the subscription in your Weekly Digest settings to send.`
+    );
+  }
+
   // Obtain or refresh Google OAuth access token
   let token = getGoogleAccessToken();
   if (!token) {
@@ -442,13 +450,23 @@ export async function sendWeeklySummaryEmail(
     throw new Error("A valid recipient email address is required.");
   }
 
+  // Check subscription preference before sending
+  const subscriptionSettings = await getDigestSettings(digest.userId);
+  if (subscriptionSettings.enabled === false) {
+    throw new Error(
+      `Weekly digest email subscription is currently paused/off for ${digest.userEmail}. Please enable the subscription in your Weekly Digest settings to send.`
+    );
+  }
+
   const response = await fetch("/api/digest/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      userId: digest.userId,
       userEmail: digest.userEmail,
       userName,
       digest,
+      isSubscribed: subscriptionSettings.enabled,
     }),
   });
 
@@ -533,6 +551,15 @@ export async function getDigestSettings(userId: string): Promise<WeeklyDigestSet
     if (snap.exists()) {
       return { ...defaultSettings, ...snap.data() } as WeeklyDigestSettings;
     }
+
+    // Secondary check: user document weeklyDigestEnabled field
+    const userSnap = await getDoc(doc(db, "users", userId));
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      if (typeof userData.weeklyDigestEnabled === "boolean") {
+        return { ...defaultSettings, enabled: userData.weeklyDigestEnabled };
+      }
+    }
   } catch (err) {
     console.warn("Could not load digest settings:", err);
   }
@@ -545,13 +572,95 @@ export async function saveDigestSettings(
 ): Promise<void> {
   if (!userId || userId.startsWith("guest_")) return;
 
+  const isEnabled = settings.enabled !== undefined ? settings.enabled : true;
+
   const docRef = doc(db, "users", userId, "profile", "digest_settings");
   const sanitized = sanitizeForFirestore({
-    enabled: settings.enabled !== undefined ? settings.enabled : true,
+    enabled: isEnabled,
     deliveryDay: "saturday",
     deliveryHourUtc: settings.deliveryHourUtc || 9,
     customEmail: settings.customEmail || null,
     updatedAt: Date.now(),
   });
+
+  // Save to subcollection
   await setDoc(docRef, sanitized, { merge: true });
+
+  // Also sync top-level user document for fast admin queries & rule validation
+  try {
+    const userDocRef = doc(db, "users", userId);
+    await setDoc(userDocRef, { weeklyDigestEnabled: isEnabled }, { merge: true });
+  } catch (syncErr) {
+    console.warn("Could not update weeklyDigestEnabled on user doc:", syncErr);
+  }
+
+  // Notify backend preference cache
+  try {
+    fetch("/api/digest/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        subscribed: isEnabled,
+        customEmail: settings.customEmail || null,
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+/**
+ * Subscribe in real-time to weekly digest settings changes
+ */
+export function subscribeToDigestSettings(
+  userId: string,
+  onUpdate: (settings: WeeklyDigestSettings) => void,
+  onError?: (err: any) => void
+): Unsubscribe {
+  if (!userId || userId.startsWith("guest_")) {
+    onUpdate({
+      enabled: true,
+      deliveryDay: "saturday",
+      deliveryHourUtc: 9,
+    });
+    return () => {};
+  }
+
+  const docRef = doc(db, "users", userId, "profile", "digest_settings");
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as WeeklyDigestSettings;
+        onUpdate({
+          enabled: data.enabled !== undefined ? data.enabled : true,
+          deliveryDay: "saturday",
+          deliveryHourUtc: data.deliveryHourUtc || 9,
+          customEmail: data.customEmail,
+          lastSentWeek: data.lastSentWeek,
+          updatedAt: data.updatedAt,
+        });
+      } else {
+        onUpdate({
+          enabled: true,
+          deliveryDay: "saturday",
+          deliveryHourUtc: 9,
+        });
+      }
+    },
+    (err) => {
+      console.warn("Digest settings subscription notice:", err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Quick toggle helper for user or admin
+ */
+export async function toggleUserDigestSubscription(
+  userId: string,
+  newEnabledState: boolean
+): Promise<boolean> {
+  await saveDigestSettings(userId, { enabled: newEnabledState });
+  return newEnabledState;
 }
