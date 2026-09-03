@@ -20,7 +20,9 @@ import {
   Calendar,
   Lock,
   ArrowUpDown,
-  FileText
+  FileText,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus, DeactivationAppeal } from "../types";
 import { 
@@ -37,14 +39,55 @@ interface AdminPanelModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: AuthUser;
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   isOpen,
   onClose,
   currentUser,
+  theme,
+  onToggleTheme,
 }) => {
   const [activeTab, setActiveTab] = useState<"users" | "create" | "audit" | "appeals">("users");
+
+  // Local theme state with graceful fallback
+  const [localTheme, setLocalTheme] = useState<"light" | "dark">(() => {
+    if (theme) return theme;
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    }
+    return "light";
+  });
+
+  useEffect(() => {
+    if (theme) {
+      setLocalTheme(theme);
+    }
+  }, [theme]);
+
+  const currentTheme = theme || localTheme;
+  const isDarkMode = currentTheme === "dark";
+
+  const handleToggleTheme = () => {
+    if (onToggleTheme) {
+      onToggleTheme();
+    } else {
+      const nextTheme = currentTheme === "dark" ? "light" : "dark";
+      setLocalTheme(nextTheme);
+      if (nextTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      try {
+        localStorage.setItem("gemini_journal_theme", nextTheme);
+      } catch (e) {
+        console.warn("Theme storage notice:", e);
+      }
+    }
+  };
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
   const [appeals, setAppeals] = useState<DeactivationAppeal[]>([]);
@@ -260,13 +303,35 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             </div>
           </div>
 
-          <button
-            id="btn-close-admin-panel"
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              id="btn-admin-modal-theme-toggle"
+              onClick={handleToggleTheme}
+              type="button"
+              title={`Switch to ${isDarkMode ? "Light" : "Dark"} Mode`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shadow-2xs border border-slate-200/80 dark:border-slate-700"
+            >
+              {isDarkMode ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                  <span className="hidden sm:inline">Light Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="hidden sm:inline">Dark Mode</span>
+                </>
+              )}
+            </button>
+
+            <button
+              id="btn-close-admin-panel"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Metrics Summary Strip */}

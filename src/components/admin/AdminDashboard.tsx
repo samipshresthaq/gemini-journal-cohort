@@ -77,6 +77,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Theme-aware state for chart styling
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
   const loadMetrics = async (days: number, showRefreshIndicator: boolean = false) => {
     if (showRefreshIndicator) setIsRefreshing(true);
     else setIsLoading(true);
@@ -395,26 +412,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.6} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke={isDark ? "#334155" : "#e2e8f0"}
+                    opacity={isDark ? 0.4 : 0.8}
+                  />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11, fill: "#94a3b8" }}
-                    axisLine={{ stroke: "#e2e8f0" }}
+                    tick={{ fontSize: 11, fill: isDark ? "#94a3b8" : "#64748b" }}
+                    axisLine={{ stroke: isDark ? "#334155" : "#cbd5e1" }}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "#94a3b8" }}
-                    axisLine={{ stroke: "#e2e8f0" }}
+                    tick={{ fontSize: 11, fill: isDark ? "#94a3b8" : "#64748b" }}
+                    axisLine={{ stroke: isDark ? "#334155" : "#cbd5e1" }}
                     tickLine={false}
                     allowDecimals={false}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.98)",
                       borderRadius: "12px",
-                      border: "1px solid #334155",
-                      color: "#f8fafc",
+                      border: isDark ? "1px solid #334155" : "1px solid #e2e8f0",
+                      color: isDark ? "#f8fafc" : "#0f172a",
+                      boxShadow: isDark
+                        ? "0 10px 25px -5px rgba(0, 0, 0, 0.6)"
+                        : "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
                       fontSize: "12px",
+                    }}
+                    itemStyle={{
+                      color: isDark ? "#f1f5f9" : "#0f172a",
+                    }}
+                    labelStyle={{
+                      color: isDark ? "#94a3b8" : "#475569",
+                      fontWeight: 600,
                     }}
                     formatter={(value: any) => [
                       `${value} users`,
@@ -487,26 +519,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.6} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke={isDark ? "#334155" : "#e2e8f0"}
+                    opacity={isDark ? 0.4 : 0.8}
+                  />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11, fill: "#94a3b8" }}
-                    axisLine={{ stroke: "#e2e8f0" }}
+                    tick={{ fontSize: 11, fill: isDark ? "#94a3b8" : "#64748b" }}
+                    axisLine={{ stroke: isDark ? "#334155" : "#cbd5e1" }}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fontSize: 11, fill: "#94a3b8" }}
-                    axisLine={{ stroke: "#e2e8f0" }}
+                    tick={{ fontSize: 11, fill: isDark ? "#94a3b8" : "#64748b" }}
+                    axisLine={{ stroke: isDark ? "#334155" : "#cbd5e1" }}
                     tickLine={false}
                     tickFormatter={(val) => `$${val}`}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.98)",
                       borderRadius: "12px",
-                      border: "1px solid #334155",
-                      color: "#f8fafc",
+                      border: isDark ? "1px solid #334155" : "1px solid #e2e8f0",
+                      color: isDark ? "#f8fafc" : "#0f172a",
+                      boxShadow: isDark
+                        ? "0 10px 25px -5px rgba(0, 0, 0, 0.6)"
+                        : "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
                       fontSize: "12px",
+                    }}
+                    itemStyle={{
+                      color: isDark ? "#f1f5f9" : "#0f172a",
+                    }}
+                    labelStyle={{
+                      color: isDark ? "#94a3b8" : "#475569",
+                      fontWeight: 600,
                     }}
                     formatter={(val: any, name: string) => {
                       if (name === "Cost") return [`$${Number(val).toFixed(5)} USD`, "Estimated Cost"];
@@ -575,11 +622,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.95)",
+                      backgroundColor: isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.98)",
                       borderRadius: "12px",
-                      border: "1px solid #334155",
-                      color: "#f8fafc",
+                      border: isDark ? "1px solid #334155" : "1px solid #e2e8f0",
+                      color: isDark ? "#f8fafc" : "#0f172a",
+                      boxShadow: isDark
+                        ? "0 10px 25px -5px rgba(0, 0, 0, 0.6)"
+                        : "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
                       fontSize: "12px",
+                    }}
+                    itemStyle={{
+                      color: isDark ? "#f1f5f9" : "#0f172a",
+                    }}
+                    labelStyle={{
+                      color: isDark ? "#94a3b8" : "#475569",
+                      fontWeight: 600,
                     }}
                     formatter={(val: any, name: string) => [
                       `${(Number(val) / 1000).toFixed(1)}k tokens`,

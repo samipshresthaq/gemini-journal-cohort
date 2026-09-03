@@ -669,6 +669,8 @@ export default function App() {
           activeRoute={adminSubRoute}
           onRouteChange={(r) => navigate(`/admin/${r}`)}
           onBackToJournal={() => navigate("/")}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       );
     }
@@ -1000,6 +1002,8 @@ export default function App() {
           isOpen={isAdminPanelOpen}
           onClose={() => setIsAdminPanelOpen(false)}
           currentUser={user}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       )}
 

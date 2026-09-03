@@ -13,7 +13,6 @@ import {
   setPersistence
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
 // import localFirebaseConfig from "../firebase-applet-config.json";
 
 // Dynamic Firebase configuration: Sensitive API key and project settings are retrieved from Secret Manager / Environment Variables
@@ -29,7 +28,6 @@ const resolvedFirebaseConfig = {
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(resolvedFirebaseConfig) : getApp();
-const analytics = getAnalytics(app);
 
 // Initialize Auth
 export const auth = getAuth(app);
