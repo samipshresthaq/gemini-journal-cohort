@@ -133,15 +133,15 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             id="btn-toggle-voice-dictation"
             type="button"
             onClick={handleMicClick}
-            disabled={isTranscribing}
-            className={`relative p-3 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-sm ${
+            disabled={isGuest || isTranscribing}
+            className={`relative p-3 rounded-2xl flex items-center justify-center transition-all shadow-sm ${
               isGuest
-                ? "bg-white dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
+                ? "bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-50"
                 : isActive
-                ? "bg-indigo-600 hover:bg-indigo-500 text-white ring-4 ring-indigo-500/30 scale-105"
-                : "bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                ? "bg-indigo-600 hover:bg-indigo-500 text-white ring-4 ring-indigo-500/30 scale-105 cursor-pointer"
+                : "bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
             }`}
-            title={isGuest ? "Sign in to enable voice" : isActive ? "Stop voice listening" : "Start hands-free voice input"}
+            title={isGuest ? "Voice Dictation requires an active account." : isActive ? "Stop voice listening" : "Start hands-free voice input"}
           >
             {isTranscribing ? (
               <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
@@ -183,7 +183,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             </div>
             <p className={`text-xs ${isActive && !isGuest ? "text-slate-400" : "text-slate-500 dark:text-slate-400"}`}>
               {isGuest
-                ? "Guest accounts are limited to conversation mode. Sign in to speak or dictate."
+                ? "Voice dictation and Gemini audio transcription require an active account."
                 : isActive
                 ? "Speak freely. Say 'Reflect' to send, 'New paragraph' for line breaks."
                 : "Click microphone to dictate or speak hands-free commands."}
@@ -198,10 +198,13 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             <button
               type="button"
               onClick={() => handleModeSwitch("handsfree")}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                voiceMode === "handsfree"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
-                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white"
+              disabled={isGuest}
+              className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                isGuest
+                  ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50"
+                  : voiceMode === "handsfree"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs cursor-pointer"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white cursor-pointer"
               }`}
             >
               Hands-Free Live
@@ -209,10 +212,13 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
             <button
               type="button"
               onClick={() => handleModeSwitch("audio-record")}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-                voiceMode === "audio-record"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
-                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white"
+              disabled={isGuest}
+              className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 ${
+                isGuest
+                  ? "text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50"
+                  : voiceMode === "audio-record"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs cursor-pointer"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white cursor-pointer"
               }`}
             >
               <Sparkles className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />

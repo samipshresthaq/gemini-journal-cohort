@@ -11,13 +11,15 @@ import {
   Sliders,
   CheckCircle2,
   AlertTriangle,
+  ShieldAlert,
 } from "lucide-react";
-import { AuthUser, UserProfile } from "../../types";
+import { AuthUser, UserProfile, DeactivationAppeal } from "../../types";
 import { AdminDashboard } from "./AdminDashboard";
 import { AdminUsers } from "./AdminUsers";
-import { subscribeToUserDirectory } from "../../lib/adminService";
+import { AdminAppeals } from "./AdminAppeals";
+import { subscribeToUserDirectory, subscribeToAppeals } from "../../lib/adminService";
 
-export type AdminRoute = "dashboard" | "users";
+export type AdminRoute = "dashboard" | "users" | "appeals";
 
 interface AdminLayoutProps {
   currentUser: AuthUser;
@@ -34,6 +36,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isUsersLoading, setIsUsersLoading] = useState(true);
+  const [appeals, setAppeals] = useState<DeactivationAppeal[]>([]);
 
   // Subscribe to live Firestore user list
   useEffect(() => {
@@ -51,8 +54,24 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     return () => unsub();
   }, []);
 
+  // Subscribe to live Firestore appeals list
+  useEffect(() => {
+    const unsubAppeals = subscribeToAppeals(
+      (appealsList) => {
+        setAppeals(appealsList);
+      },
+      (err) => {
+        console.warn("Failed to stream appeals in AdminLayout:", err);
+      }
+    );
+
+    return () => unsubAppeals();
+  }, []);
+
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.status === "active").length;
+  const pendingAppealsCount = appeals.filter((a) => a.status === "pending").length;
+  const totalAppealsCount = appeals.length;
 
   return (
     <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
@@ -82,9 +101,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                     <h1 className="text-sm font-black tracking-tight text-slate-900 dark:text-white">
                       Admin Control Portal
                     </h1>
-                    <span className="px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[10px] font-extrabold uppercase border border-indigo-200 dark:border-indigo-800">
-                      v2.4
-                    </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     Logged in as {currentUser.displayName || currentUser.email} (Super Admin)
@@ -132,6 +148,34 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                     </span>
                   )}
                 </button>
+
+                <button
+                  id="admin-route-tab-appeals"
+                  onClick={() => onRouteChange("appeals")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeRoute === "appeals"
+                      ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs font-bold"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Appeals</span>
+                  {pendingAppealsCount > 0 ? (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                      {pendingAppealsCount}
+                    </span>
+                  ) : totalAppealsCount > 0 ? (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                        activeRoute === "appeals"
+                          ? "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                      }`}
+                    >
+                      {totalAppealsCount}
+                    </span>
+                  ) : null}
+                </button>
               </nav>
             </div>
           </div>
@@ -144,6 +188,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           <AdminDashboard
             liveUsers={users}
             onNavigateToUsers={() => onRouteChange("users")}
+            onNavigateToAppeals={() => onRouteChange("appeals")}
+            pendingAppealsCount={pendingAppealsCount}
           />
         )}
 
@@ -152,6 +198,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             currentUser={currentUser}
             users={users}
             isLoading={isUsersLoading}
+            onNavigateToAppeals={() => onRouteChange("appeals")}
+          />
+        )}
+
+        {activeRoute === "appeals" && (
+          <AdminAppeals
+            currentUser={currentUser}
+            liveUsers={users}
+            onNavigateToUsers={() => onRouteChange("users")}
           />
         )}
       </main>

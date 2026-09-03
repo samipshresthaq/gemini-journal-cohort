@@ -78,14 +78,14 @@ export async function getAdminCredentials(): Promise<{
 
   // Fetch individual secrets from Secret Manager or server environment variables
   const fetchedEmail = await accessSecret("ADMIN_EMAIL", "ADMIN_EMAIL");
-  const adminEmail = (fetchedEmail || process.env.ADMIN_EMAIL || "admin@geminijournal.app").toLowerCase().trim();
+  const adminEmail = (fetchedEmail || process.env.ADMIN_EMAIL || "").toLowerCase().trim();
   const adminPassword = await accessSecret("ADMIN_PASSWORD", "ADMIN_PASSWORD") || process.env.ADMIN_PASSWORD;
   const configuredExtra = (await accessSecret("ADMIN_AUTHORIZED_EMAILS", "ADMIN_AUTHORIZED_EMAILS")) || process.env.ADMIN_AUTHORIZED_EMAILS || "";
   
   const authorizedEmails = [
     adminEmail,
     ...configuredExtra.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
-  ];
+  ].filter(Boolean);
 
   return {
     adminEmail,

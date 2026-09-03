@@ -1,9 +1,11 @@
 import React from "react";
 import { PromptStarter } from "../types";
-import { Sparkles, Sun, Compass, Lightbulb, HeartHandshake, Target } from "lucide-react";
+import { Sparkles, Sun, Compass, Lightbulb, HeartHandshake, Target, Lock } from "lucide-react";
 
 interface PromptStartersProps {
   onSelectPrompt: (starter: PromptStarter) => void;
+  disabled?: boolean;
+  onRequireAuth?: () => void;
 }
 
 export const PROMPT_STARTERS: PromptStarter[] = [
@@ -39,7 +41,11 @@ export const PROMPT_STARTERS: PromptStarter[] = [
   },
 ];
 
-export const PromptStarters: React.FC<PromptStartersProps> = ({ onSelectPrompt }) => {
+export const PromptStarters: React.FC<PromptStartersProps> = ({
+  onSelectPrompt,
+  disabled = false,
+  onRequireAuth,
+}) => {
   const getIcon = (name: string) => {
     switch (name) {
       case "Sun":
@@ -57,29 +63,52 @@ export const PromptStarters: React.FC<PromptStartersProps> = ({ onSelectPrompt }
     }
   };
 
+  const handleClick = (starter: PromptStarter) => {
+    if (disabled) {
+      onRequireAuth?.();
+      return;
+    }
+    onSelectPrompt(starter);
+  };
+
   return (
     <div id="prompt-starters-section" className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Reflection Starters
-        </h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Reflection Starters
+          </h3>
+        </div>
+        {disabled && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+            <Lock className="w-3 h-3" /> Account Required
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {PROMPT_STARTERS.map((starter, idx) => (
           <button
             key={idx}
             id={`prompt-starter-btn-${idx}`}
-            onClick={() => onSelectPrompt(starter)}
-            className="group text-left p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all flex flex-col justify-between gap-2.5 cursor-pointer shadow-xs"
+            onClick={() => handleClick(starter)}
+            disabled={disabled}
+            className={`group text-left p-4 rounded-2xl border transition-all flex flex-col justify-between gap-2.5 shadow-xs ${
+              disabled
+                ? "border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/40 opacity-50 cursor-not-allowed"
+                : "border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md cursor-pointer"
+            }`}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-xs group-hover:scale-105 group-hover:bg-indigo-50/50 dark:group-hover:bg-indigo-950/50 transition-all">
-                {getIcon(starter.iconName)}
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-xs transition-all ${!disabled && "group-hover:scale-105 group-hover:bg-indigo-50/50 dark:group-hover:bg-indigo-950/50"}`}>
+                  {getIcon(starter.iconName)}
+                </div>
+                <span className={`text-xs font-bold line-clamp-1 transition-colors ${disabled ? "text-slate-500 dark:text-slate-400" : "text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"}`}>
+                  {starter.title}
+                </span>
               </div>
-              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                {starter.title}
-              </span>
+              {disabled && <Lock className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />}
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
               "{starter.prompt}"

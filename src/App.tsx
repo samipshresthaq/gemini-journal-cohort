@@ -37,6 +37,7 @@ import { AuthModal } from "./components/AuthModal";
 import { WeeklyDigestModal } from "./components/WeeklyDigestModal";
 import { AdminPanelModal } from "./components/AdminPanelModal";
 import { AdminLayout, AdminRoute } from "./components/admin/AdminLayout";
+import { DeactivatedUserScreen } from "./components/DeactivatedUserScreen";
 import { Loader2, ShieldAlert, LogOut, Shield, ShieldCheck, KeyRound, ArrowLeft, Lock, ArrowRight } from "lucide-react";
 
 const GUEST_SESSION_KEY = "gemini_journal_active_guest";
@@ -95,7 +96,11 @@ export default function App() {
   }, []);
 
   const isAdminRoute = currentPath.startsWith("/admin");
-  const adminSubRoute: AdminRoute = currentPath.includes("users") ? "users" : "dashboard";
+  const adminSubRoute: AdminRoute = currentPath.includes("users")
+    ? "users"
+    : currentPath.includes("appeals")
+    ? "appeals"
+    : "dashboard";
 
   // Auth modal state for gating features
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -219,7 +224,7 @@ export default function App() {
             setUser(parsedGuest);
             setUserProfile({
               uid: parsedGuest.uid,
-              email: "guest@geminijournal.app",
+              email: parsedGuest.email || "",
               displayName: "Guest Explorer",
               role: "user",
               status: "active",
@@ -893,39 +898,12 @@ export default function App() {
             errorMessage={authError}
           />
         ) : isDeactivated ? (
-          /* Deactivated User Account Notice */
-          <div className="max-w-2xl mx-auto py-16 px-6 text-center space-y-6 animate-in fade-in duration-300">
-            <div className="w-16 h-16 rounded-3xl bg-rose-50 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-800 shadow-xl shadow-rose-500/10">
-              <ShieldAlert className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-2">
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800">
-                Account Status: Deactivated
-              </span>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
-                Your Account Has Been Deactivated
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                An administrator has temporarily deactivated your account ({user.email}). You cannot create or modify reflections while deactivated.
-              </p>
-              {userProfile?.deactivationReason && (
-                <div className="mt-3 p-3 bg-rose-50/50 dark:bg-rose-950/30 rounded-xl border border-rose-200/60 dark:border-rose-900/60 text-xs text-rose-700 dark:text-rose-300 italic max-w-md mx-auto">
-                  Note: {userProfile.deactivationReason}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-4 flex items-center justify-center gap-3">
-              <button
-                id="btn-deactivated-sign-out"
-                onClick={handleSignOut}
-                className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" /> Sign Out
-              </button>
-            </div>
-          </div>
+          /* Deactivated User Account Notice with Contact Administrator Appeal Flow */
+          <DeactivatedUserScreen
+            user={user}
+            profile={userProfile}
+            onSignOut={handleSignOut}
+          />
         ) : activeEntry ? (
           <JournalEditor
             user={user}

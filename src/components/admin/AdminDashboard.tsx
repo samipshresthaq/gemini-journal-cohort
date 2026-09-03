@@ -21,6 +21,7 @@ import {
   FileText,
   Mic,
   Mail,
+  ShieldAlert,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -43,6 +44,8 @@ import { fetchAdminAnalytics } from "../../lib/adminService";
 interface AdminDashboardProps {
   liveUsers: UserProfile[];
   onNavigateToUsers: () => void;
+  onNavigateToAppeals?: () => void;
+  pendingAppealsCount?: number;
 }
 
 const MODEL_COLORS: { [key: string]: string } = {
@@ -61,7 +64,12 @@ const FEATURE_ICONS: { [key: string]: React.ReactNode } = {
   "Weekly Digest": <Mail className="w-3.5 h-3.5 text-blue-500" />,
 };
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ liveUsers, onNavigateToUsers }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  liveUsers,
+  onNavigateToUsers,
+  onNavigateToAppeals,
+  pendingAppealsCount = 0,
+}) => {
   const [timeframeDays, setTimeframeDays] = useState<number>(14);
   const [signupViewMode, setSignupViewMode] = useState<"daily" | "cumulative">("daily");
   const [analytics, setAnalytics] = useState<AdminAnalyticsData | null>(null);
@@ -175,6 +183,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ liveUsers, onNav
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {/* Pending Appeals Alert Banner */}
+      {pendingAppealsCount > 0 && (
+        <div
+          id="banner-pending-appeals"
+          onClick={onNavigateToAppeals}
+          className="p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-900/40 transition-all shadow-2xs group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-200/80 dark:bg-amber-900 text-amber-800 dark:text-amber-300 flex items-center justify-center font-bold shrink-0">
+              <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-300" />
+            </div>
+            <div>
+              <span className="font-bold text-sm text-slate-900 dark:text-white">
+                {pendingAppealsCount} Deactivation Appeal{pendingAppealsCount > 1 ? "s" : ""} Pending Administrative Review
+              </span>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300/80 mt-0.5">
+                Deactivated users have submitted reinstatement requests in Firestore. Click here to review and take action.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-3">
+            <span>Review Appeals</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </div>
         </div>
       )}
 

@@ -13,7 +13,9 @@ import {
   Moon,
   User as UserIcon,
   Flame,
-  ShieldCheck
+  ShieldCheck,
+  Lock,
+  LogIn
 } from "lucide-react";
 
 interface NavbarProps {
@@ -63,16 +65,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   isWalkthroughOpen,
   showTestGuide = false,
 }) => {
-  const handleNewEntryClick = () => {
-    if (isGuest && guestEntryCount >= maxGuestEntries) {
-      onOpenAuthModal?.(
-        `Guest Entry Limit Reached (${maxGuestEntries} of ${maxGuestEntries} Entries)`,
-        `Guest mode allows a maximum of ${maxGuestEntries} reflection entries. Sign in with an account to create unlimited reflections and sync your history to Cloud Firestore.`
-      );
-      return;
-    }
-    onNewEntry();
-  };
+  const hasActiveAccount = Boolean(
+    user && 
+    !isGuest && 
+    user.status !== "deactivated" && 
+    !user.uid.startsWith("guest_")
+  );
 
   return (
     <header id="main-app-header" className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors duration-200">
@@ -95,156 +93,150 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Center / Right controls */}
-        {user ? (
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Cloud Persistence State Pill (only for authenticated cloud users) */}
-            {!isGuest && (
-              <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80">
-                {saveStatus === "saving" && (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-slate-600 dark:text-slate-300 font-medium">Saving to Cloud...</span>
-                  </>
-                )}
-                {saveStatus === "saved" && (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-slate-600 dark:text-slate-300 font-medium">Saved to Cloud</span>
-                  </>
-                )}
-                {saveStatus === "error" && (
-                  <button
-                    id="btn-retry-save-pill"
-                    onClick={onRetrySave}
-                    className="flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:text-rose-700 font-medium cursor-pointer"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    <span>Retry Save</span>
-                  </button>
-                )}
-                {saveStatus === "idle" && (
-                  <span className="text-slate-500 dark:text-slate-400 font-medium">Cloud Synced</span>
-                )}
-              </div>
-            )}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Active User Feature Buttons: Only displayed if the active user signs in */}
+          {hasActiveAccount && (
+            <>
+              {/* Cloud Persistence State Pill */}
+              {saveStatus && saveStatus != "idle" && (
+                <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80">
+                  {saveStatus === "saving" && (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+                      <span className="text-slate-600 dark:text-slate-300 font-medium">Saving to Cloud...</span>
+                    </>
+                  )}
+                  {saveStatus === "saved" && (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-slate-600 dark:text-slate-300 font-medium">Saved to Cloud</span>
+                    </>
+                  )}
+                  {saveStatus === "error" && (
+                    <button
+                      id="btn-retry-save-pill"
+                      onClick={onRetrySave}
+                      className="flex items-center gap-1 text-rose-600 dark:text-rose-400 hover:text-rose-700 font-medium cursor-pointer"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>Retry Save</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
-            {/* Streak Indicator Pill (only for authenticated users with active streak >= 1 day) */}
-            {!isGuest && streak && streak.currentStreak > 0 && (
+              {/* Streak Indicator Pill */}
+              {streak && streak.currentStreak > 0 && (
+                <button
+                  id="btn-nav-streak-pill"
+                  onClick={onOpenProfile}
+                  title={`Daily Login Streak: ${streak.currentStreak} ${streak.currentStreak === 1 ? "day" : "days"} (Longest: ${streak.longestStreak} ${streak.longestStreak === 1 ? "day" : "days"}). Click to view stats.`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60"
+                >
+                  <Flame
+                    className={`w-3.5 h-3.5 ${
+                      streak.currentStreak > 1
+                        ? "text-amber-500 fill-amber-400 animate-pulse"
+                        : "text-amber-500 fill-amber-300"
+                    }`}
+                  />
+                  <span className="font-extrabold">{streak.currentStreak}</span>
+                </button>
+              )}
+
+              {/* Admin Portal Button */}
+              {isAdmin && onOpenAdminPanel && (
+                <button
+                  id="btn-nav-admin-panel"
+                  onClick={onOpenAdminPanel}
+                  title="System Admin Portal - Manage Users & Security"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/60"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span>Admin</span>
+                </button>
+              )}
+
+              {/* Weekly Saturday Digest Feature Button */}
+              {onOpenWeeklyDigest && (
+                <button
+                  id="btn-nav-weekly-digest"
+                  onClick={onOpenWeeklyDigest}
+                  title="Weekly Journal Digest (Sent Every Saturday)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs bg-indigo-50/90 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="hidden md:inline">Weekly Digest</span>
+                  <span className="px-1.5 py-0.2 rounded-md bg-indigo-200/70 dark:bg-indigo-800/80 text-[10px] font-bold text-indigo-800 dark:text-indigo-200">
+                    Sat
+                  </span>
+                </button>
+              )}
+
+              {/* Past Entries Feature Button */}
               <button
-                id="btn-nav-streak-pill"
-                onClick={onOpenProfile}
-                title={`Daily Login Streak: ${streak.currentStreak} ${streak.currentStreak === 1 ? "day" : "days"} (Longest: ${streak.longestStreak} ${streak.longestStreak === 1 ? "day" : "days"}). Click to view stats.`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60"
-              >
-                <Flame
-                  className={`w-3.5 h-3.5 ${
-                    streak.currentStreak > 1
-                      ? "text-amber-500 fill-amber-400 animate-pulse"
-                      : "text-amber-500 fill-amber-300"
-                  }`}
-                />
-                <span className="font-extrabold">{streak.currentStreak}</span>
-                <span className="hidden sm:inline font-medium">
-                  {streak.currentStreak === 1 ? "day streak" : "days streak"}
-                </span>
-              </button>
-            )}
-
-            {/* Admin Portal Button */}
-            {isAdmin && onOpenAdminPanel && (
-              <button
-                id="btn-nav-admin-panel"
-                onClick={onOpenAdminPanel}
-                title="System Admin Portal - Manage Users & Security"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/60"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                <span>Admin</span>
-              </button>
-            )}
-
-            {/* Weekly Saturday Digest Button */}
-            {onOpenWeeklyDigest && (
-              <button
-                id="btn-nav-weekly-digest"
-                onClick={onOpenWeeklyDigest}
-                title="Weekly Journal Digest (Sent Every Saturday)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs bg-indigo-50/90 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                <span className="hidden md:inline">Weekly Digest</span>
-                <span className="px-1.5 py-0.2 rounded-md bg-indigo-200/70 dark:bg-indigo-800/80 text-[10px] font-bold text-indigo-800 dark:text-indigo-200">
-                  Sat
-                </span>
-              </button>
-            )}
-
-
-            {isGuest && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-                Guest ({guestEntryCount}/{maxGuestEntries} Entries)
-              </span>
-            )}
-
-            {/* Dark / Light Theme Toggle Button */}
-            {onToggleTheme && (
-              <button
-                id="btn-toggle-theme"
-                onClick={onToggleTheme}
-                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                aria-label={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition-all cursor-pointer shadow-xs flex items-center justify-center"
-              >
-                {theme === "dark" ? (
-                  <Sun className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <Moon className="w-4 h-4 text-slate-600" />
-                )}
-              </button>
-            )}
-
-            {/* Walkthrough Verification Toggle - Only shown in development mode */}
-            {showTestGuide && (
-              <button
-                id="btn-nav-walkthrough-guide"
-                onClick={onToggleWalkthrough}
-                title="Test Walkthrough & Verification"
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isWalkthroughOpen
-                    ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 shadow-xs"
-                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                id="btn-nav-history"
+                onClick={onToggleHistory}
+                title="View Past Journal Entries"
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isHistoryOpen
+                    ? "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-xs"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                 }`}
               >
-                <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span className="hidden md:inline">Test Guide</span>
+                <History className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Past Entries</span>
               </button>
-            )}
 
-            {/* History Toggle */}
+              {/* New Entry Feature Button */}
+              <button
+                id="btn-nav-new-entry"
+                onClick={onNewEntry}
+                title="Start a New Reflection"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white hover:shadow cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Entry</span>
+              </button>
+
+              {/* Guide / Walkthrough (Only shown to active authenticated user if enabled) */}
+              {showTestGuide && (
+                <button
+                  id="btn-nav-walkthrough-guide"
+                  onClick={onToggleWalkthrough}
+                  title="Test Walkthrough & Verification"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isWalkthroughOpen
+                      ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 shadow-xs"
+                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span className="hidden md:inline">Test Guide</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Theme Toggle (Light / Dark Mode) */}
+          {onToggleTheme && (
             <button
-              id="btn-nav-history"
-              onClick={onToggleHistory}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                isHistoryOpen
-                  ? "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-xs"
-                  : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-              }`}
+              id="btn-toggle-theme"
+              onClick={onToggleTheme}
+              title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition-all cursor-pointer shadow-xs flex items-center justify-center shrink-0"
             >
-              <History className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Past Entries</span>
+              {theme === "dark" ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-600" />
+              )}
             </button>
+          )}
 
-            {/* New Entry Button */}
-            <button
-              id="btn-nav-new-entry"
-              onClick={handleNewEntryClick}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Entry</span>
-            </button>
-
-            {/* User Profile Trigger and Sign Out */}
+          {/* Account Profile or Sign In Control */}
+          {hasActiveAccount && user ? (
             <div className="flex items-center pl-2 border-l border-slate-200 dark:border-slate-800 gap-1.5">
               <button
                 id="btn-nav-user-profile"
@@ -260,12 +252,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className={`w-7 h-7 rounded-full ${isGuest ? "bg-amber-600" : "bg-indigo-600"} text-white flex items-center justify-center text-xs font-bold`}>
-                    {isGuest ? "G" : (user.displayName || user.email || "U")[0].toUpperCase()}
+                  <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                    {(user.displayName || user.email || "U")[0].toUpperCase()}
                   </div>
                 )}
                 <span className="hidden lg:inline max-w-[100px] truncate">
-                  {isGuest ? "Guest" : user.displayName || (user.email ? user.email.split("@")[0] : "User")}
+                  {user.displayName || (user.email ? user.email.split("@")[0] : "User")}
                 </span>
               </button>
 
@@ -278,40 +270,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Theme Toggle in Unauthenticated state */}
-            {onToggleTheme && (
-              <button
-                id="btn-toggle-theme-unauth"
-                onClick={onToggleTheme}
-                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                aria-label={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 transition-all cursor-pointer shadow-xs flex items-center justify-center"
-              >
-                {theme === "dark" ? (
-                  <Sun className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <Moon className="w-4 h-4 text-slate-600" />
-                )}
-              </button>
-            )}
-
-            {/* Walkthrough Verification Toggle - Only shown in development mode */}
-            {showTestGuide && (
-              <button
-                id="btn-nav-walkthrough-guide-unauth"
-                onClick={onToggleWalkthrough}
-                title="Test Walkthrough & Verification"
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span className="hidden sm:inline">Test Guide</span>
-              </button>
-            )}
-          </div>
-        )}
+          ) : (
+            <button
+              id="btn-nav-sign-in"
+              onClick={() => onOpenAuthModal?.(
+                "Sign In to Your Active Account",
+                "Sign in to unlock reflection sessions, weekly digests, past entries, and Cloud Firestore synchronization."
+              )}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

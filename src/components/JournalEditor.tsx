@@ -110,8 +110,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasActiveAccount = Boolean(
+    user && 
+    !isGuest && 
+    user.status !== "deactivated" && 
+    !user.uid.startsWith("guest_")
+  );
+
   const userConversationCount = entry.messages.filter((m) => m.role === "user").length;
-  const isEntryConversationLimitReached = isGuest && userConversationCount >= maxGuestConversationsPerEntry;
+  const isEntryConversationLimitReached = !hasActiveAccount || (isGuest && userConversationCount >= maxGuestConversationsPerEntry);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -120,10 +127,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
   // File Upload & Processing Handler
   const handleProcessFile = async (file: File) => {
-    if (isGuest) {
+    if (!hasActiveAccount) {
       onRequireAuth?.(
         "Unlock Note & PDF Attachment",
-        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an account. Sign in to attach notes."
+        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an active account. Sign in to attach notes."
       );
       return;
     }
@@ -167,10 +174,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   const handleAttachNoteClick = () => {
-    if (isGuest) {
+    if (!hasActiveAccount) {
       onRequireAuth?.(
         "Unlock Note & PDF Attachment",
-        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an account. Sign in to attach notes."
+        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an active account. Sign in to attach notes."
       );
       return;
     }
@@ -205,10 +212,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     e.stopPropagation();
     setIsDraggingOver(false);
 
-    if (isGuest) {
+    if (!hasActiveAccount) {
       onRequireAuth?.(
         "Unlock Note & PDF Attachment",
-        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an account. Sign in to attach notes."
+        "Uploading written notes, journal drafts, and PDF documents for Gemini analysis requires an active account. Sign in to attach notes."
       );
       return;
     }
@@ -222,11 +229,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
+    if (!hasActiveAccount) {
+      onRequireAuth?.(
+        "Active Account Required for Reflections",
+        "Writing reflections, conversing with Gemini AI, and saving journal entries requires an active registered account."
+      );
+      return;
+    }
+
     // Allow sending if there's either typed text OR an extracted attached note ready
     const hasNoteText = Boolean(attachedNote && attachedNote.extractedText && !attachedNote.isProcessing);
     if ((!inputText.trim() && !hasNoteText) || isGeneratingReply) return;
 
-    if (isEntryConversationLimitReached) {
+    if (isGuest && userConversationCount >= maxGuestConversationsPerEntry) {
       onRequireAuth?.(
         `Conversation Limit Reached (${maxGuestConversationsPerEntry} of ${maxGuestConversationsPerEntry} in this Entry)`,
         `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per reflection entry. Sign in with an account to continue conversing${totalGuestEntries < maxGuestEntries ? " or create your second entry." : "."}`
@@ -255,10 +270,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   const handleReflectDirectlyFromModal = async (text: string) => {
-    if (isEntryConversationLimitReached) {
+    if (!hasActiveAccount) {
       onRequireAuth?.(
-        `Conversation Limit Reached (${maxGuestConversationsPerEntry} of ${maxGuestConversationsPerEntry} in this Entry)`,
-        `Guest mode allows up to ${maxGuestConversationsPerEntry} conversations per reflection entry. Sign in with an account to continue conversing.`
+        "Active Account Required",
+        "Conversing with Gemini AI and analyzing documents requires an active account."
       );
       return;
     }
@@ -272,6 +287,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   const handleInsertNoteIntoDraft = (text: string) => {
+    if (!hasActiveAccount) {
+      onRequireAuth?.(
+        "Active Account Required",
+        "Inserting notes into drafts requires an active registered account."
+      );
+      return;
+    }
     setInputText((prev) => {
       const trimmed = prev.trim();
       if (!trimmed) return text;
@@ -293,7 +315,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   // Voice Dictation hook
   const voice = useVoiceDictation({
     onTranscriptChange: (newChunk, isFinal) => {
-      if (isGuest) return;
+      if (!hasActiveAccount) return;
       setInputText((prev) => {
         const trimmed = prev.trim();
         if (!trimmed) return newChunk.trim();
@@ -301,7 +323,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       });
     },
     onVoiceCommandSend: () => {
-      if (isGuest) return;
+      if (!hasActiveAccount) return;
       setInputText((currentText) => {
         if (currentText.trim()) {
           onSendMessage(currentText.trim());
@@ -311,10 +333,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       });
     },
     onVoiceCommandSummary: () => {
-      if (isGuest) {
+      if (!hasActiveAccount) {
         onRequireAuth?.(
           "Unlock Growth Summaries",
-          "Reflection summaries and action plans require an account. Sign in to synthesize takeaways."
+          "Reflection summaries and action plans require an active account. Sign in to synthesize takeaways."
         );
         return;
       }
@@ -326,6 +348,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   });
 
   const handleSelectStarter = (starter: PromptStarter) => {
+    if (!hasActiveAccount) {
+      onRequireAuth?.(
+        "Active Account Required",
+        "Sign in with an active account to use reflection prompt starters and converse with Gemini AI."
+      );
+      return;
+    }
     setInputText(starter.prompt);
     onUpdateEntry({
       ...entry,
@@ -337,10 +366,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   const handleSummaryButtonClick = () => {
-    if (isGuest) {
+    if (!hasActiveAccount) {
       onRequireAuth?.(
         "Unlock AI Growth Summaries",
-        "Reflection summaries, emotional tone analysis, and mindful action plans require an account. Sign in to synthesize your takeaways."
+        "Reflection summaries, emotional tone analysis, and mindful action plans require an active account. Sign in to synthesize your takeaways."
       );
       return;
     }
@@ -348,10 +377,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   const handleQuickMicClick = () => {
-    if (isGuest) {
+    if (!hasActiveAccount) {
       onRequireAuth?.(
         "Unlock Voice Dictation",
-        "Hands-free voice transcription, Gemini audio dictation, and speech commands require an account. Sign in to enable."
+        "Hands-free voice transcription, Gemini audio dictation, and speech commands require an active account. Sign in to enable."
       );
       return;
     }
@@ -466,12 +495,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             id="input-entry-title"
             type="text"
             value={entry.title}
+            disabled={!hasActiveAccount}
             onChange={(e) => onUpdateEntry({ ...entry, title: e.target.value })}
             placeholder="Give this reflection a title..."
-            className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 border-none outline-none focus:ring-0 w-full placeholder:text-slate-300 dark:placeholder:text-slate-600 bg-transparent"
+            className={`text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 border-none outline-none focus:ring-0 w-full placeholder:text-slate-300 dark:placeholder:text-slate-600 bg-transparent ${
+              !hasActiveAccount ? "opacity-60 cursor-not-allowed" : ""
+            }`}
           />
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-            {!isGuest && streak && streak.currentStreak > 0 && (
+            {hasActiveAccount && streak && streak.currentStreak > 0 && (
               <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${
                 streak.currentStreak > 1
                   ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
@@ -492,14 +524,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2">
             {/* Mood picker */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className={`flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 ${
+              !hasActiveAccount ? "opacity-60" : ""
+            }`}>
               <Smile className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span className="text-slate-500 dark:text-slate-400 font-medium">Mood:</span>
               <select
                 id="select-entry-mood"
                 value={entry.mood || ""}
+                disabled={!hasActiveAccount}
                 onChange={(e) => onUpdateEntry({ ...entry, mood: e.target.value })}
-                className="bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
+                className={`bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 font-semibold ${
+                  !hasActiveAccount ? "cursor-not-allowed" : "cursor-pointer"
+                }`}
               >
                 <option value="" className="dark:bg-slate-800">Select mood...</option>
                 {MOODS.map((m) => (
@@ -511,14 +548,19 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             </div>
 
             {/* Topic picker */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className={`flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 ${
+              !hasActiveAccount ? "opacity-60" : ""
+            }`}>
               <Tag className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span className="text-slate-500 dark:text-slate-400 font-medium">Focus:</span>
               <select
                 id="select-entry-topic"
                 value={entry.topic || ""}
+                disabled={!hasActiveAccount}
                 onChange={(e) => onUpdateEntry({ ...entry, topic: e.target.value })}
-                className="bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
+                className={`bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 font-semibold ${
+                  !hasActiveAccount ? "cursor-not-allowed" : "cursor-pointer"
+                }`}
               >
                 <option value="" className="dark:bg-slate-800">Select focus area...</option>
                 {TOPICS.map((t) => (
@@ -535,11 +577,11 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             <button
               id="btn-generate-summary"
               onClick={handleSummaryButtonClick}
-              disabled={isGeneratingSummary}
-              className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 border transition-all disabled:opacity-50 cursor-pointer shadow-xs ${
-                isGuest
-                  ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700"
-                  : "bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800"
+              disabled={!hasActiveAccount || isGeneratingSummary}
+              className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 border transition-all disabled:opacity-50 shadow-xs ${
+                !hasActiveAccount
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed"
+                  : "bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100/80 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border-indigo-200/80 dark:border-indigo-800 cursor-pointer"
               }`}
             >
               {isGeneratingSummary ? (
@@ -547,7 +589,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
                   <span>Synthesizing Reflection...</span>
                 </>
-              ) : isGuest ? (
+              ) : !hasActiveAccount ? (
                 <>
                   <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Generate Growth Summary (Account Req.)</span>
@@ -574,7 +616,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
       {/* Prompt Starters if empty reflection */}
       {entry.messages.length === 0 && (
-        <PromptStarters onSelectPrompt={handleSelectStarter} />
+        <PromptStarters
+          onSelectPrompt={handleSelectStarter}
+          disabled={!hasActiveAccount}
+          onRequireAuth={() => onRequireAuth?.(
+            "Active Account Required",
+            "Sign in with an active account to use reflection prompt starters."
+          )}
+        />
       )}
 
       {/* Multi-turn Messages Stream */}
@@ -711,7 +760,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
       {/* Voice Control & Hands-Free Input Panel */}
       <VoiceControlPanel
-        isGuest={isGuest}
+        isGuest={!hasActiveAccount}
         onRequireAuth={onRequireAuth}
         isListening={voice.isListening}
         isRecordingAudio={voice.isRecordingAudio}
@@ -873,10 +922,13 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                 ref={textareaRef}
                 rows={3}
                 value={inputText}
+                disabled={!hasActiveAccount}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  attachedNote && !attachedNote.isProcessing
+                  !hasActiveAccount
+                    ? "Active account required to write reflections, converse with Gemini AI, or attach notes. Sign in to start."
+                    : attachedNote && !attachedNote.isProcessing
                     ? "Add your reflections or questions about this note (or click Reflect to analyze directly)..."
                     : entry.messages.length === 0
                     ? "Write your thoughts, attach a note/PDF, or choose a prompt starter to reflect with Gemini..."
@@ -884,13 +936,20 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     ? `Continue reflection with Gemini (Conversation ${userConversationCount + 1} of ${maxGuestConversationsPerEntry})...`
                     : "Continue your conversation with Gemini, or attach a written note/PDF..."
                 }
-                className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 leading-relaxed max-h-48"
+                className={`w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 leading-relaxed max-h-48 ${
+                  !hasActiveAccount ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               />
             </div>
 
             <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs">
               <div className="text-slate-400 dark:text-slate-500 hidden sm:block font-medium">
-                {isGuest ? (
+                {!hasActiveAccount ? (
+                  <span className="text-amber-800 dark:text-amber-300 font-semibold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200/80 dark:border-amber-800 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    Active Account Required
+                  </span>
+                ) : isGuest ? (
                   <span className="text-amber-800 dark:text-amber-300 font-semibold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200/80 dark:border-amber-800">
                     Guest Conversation {userConversationCount + 1} of {maxGuestConversationsPerEntry}
                   </span>
@@ -907,6 +966,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   ref={fileInputRef}
                   type="file"
                   id="input-note-file"
+                  disabled={!hasActiveAccount}
                   onChange={handleFileInputChange}
                   accept=".txt,.md,.markdown,.json,.csv,.rtf,.pdf,text/*,application/pdf"
                   className="hidden"
@@ -917,22 +977,23 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   id="btn-composer-attach-note"
                   type="button"
                   onClick={handleAttachNoteClick}
+                  disabled={!hasActiveAccount}
                   title={
-                    isGuest
-                      ? "Sign in to attach notes & PDFs"
+                    !hasActiveAccount
+                      ? "Sign in with an active account to attach notes & PDFs"
                       : attachedNote
                       ? "Note attached - click to choose another"
                       : "Attach note or PDF document (.txt, .md, .pdf)"
                   }
-                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isGuest
-                      ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 ${
+                    !hasActiveAccount
+                      ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-50"
                       : attachedNote
-                      ? "bg-indigo-50 dark:bg-indigo-950/70 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
-                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                      ? "bg-indigo-50 dark:bg-indigo-950/70 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 cursor-pointer"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 cursor-pointer"
                   }`}
                 >
-                  {isGuest ? (
+                  {!hasActiveAccount ? (
                     <>
                       <Paperclip className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                       <span className="text-xs font-semibold hidden md:inline">Attach Note</span>
@@ -953,16 +1014,17 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   id="btn-composer-quick-mic"
                   type="button"
                   onClick={handleQuickMicClick}
-                  title={isGuest ? "Sign in to enable voice" : voice.isListening ? "Stop listening" : "Start hands-free voice input"}
-                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isGuest
-                      ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                  disabled={!hasActiveAccount}
+                  title={!hasActiveAccount ? "Sign in with an active account to enable voice" : voice.isListening ? "Stop listening" : "Start hands-free voice input"}
+                  className={`p-2.5 rounded-xl border transition-all flex items-center gap-1.5 ${
+                    !hasActiveAccount
+                      ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-50"
                       : voice.isListening || voice.isRecordingAudio
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse"
-                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs animate-pulse cursor-pointer"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 cursor-pointer"
                   }`}
                 >
-                  {isGuest ? (
+                  {!hasActiveAccount ? (
                     <>
                       <Mic className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                       <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
@@ -996,6 +1058,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   id="btn-send-reflection-prompt"
                   type="submit"
                   disabled={
+                    !hasActiveAccount ||
                     (!inputText.trim() && !(attachedNote && attachedNote.extractedText && !attachedNote.isProcessing)) ||
                     isGeneratingReply ||
                     (attachedNote?.isProcessing ?? false)

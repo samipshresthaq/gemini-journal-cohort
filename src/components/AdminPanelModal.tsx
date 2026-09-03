@@ -22,14 +22,16 @@ import {
   ArrowUpDown,
   FileText
 } from "lucide-react";
-import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus } from "../types";
+import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus, DeactivationAppeal } from "../types";
 import { 
   subscribeToUserDirectory,
   setUserAccountStatus,
   setUserRole,
   adminCreateUser,
-  subscribeToAdminAuditLogs 
+  subscribeToAdminAuditLogs,
+  subscribeToAppeals,
 } from "../lib/adminService";
+import { AdminAppeals } from "./admin/AdminAppeals";
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -42,9 +44,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onClose,
   currentUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<"users" | "create" | "audit">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "create" | "audit" | "appeals">("users");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
+  const [appeals, setAppeals] = useState<DeactivationAppeal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "deactivated">("all");
@@ -93,9 +96,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       }
     );
 
+    const unsubAppeals = subscribeToAppeals(
+      (appealsList) => {
+        setAppeals(appealsList);
+      },
+      (err) => {
+        console.warn("Could not load appeals:", err);
+      }
+    );
+
     return () => {
       unsubUsers();
       unsubAudit();
+      unsubAppeals();
     };
   }, [isOpen]);
 
@@ -363,6 +376,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             }`}
           >
             <Clock className="w-3.5 h-3.5" /> Security Audit Trail ({auditLogs.length})
+          </button>
+
+          <button
+            id="tab-admin-appeals"
+            onClick={() => setActiveTab("appeals")}
+            className={`pb-3 px-3 border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              activeTab === "appeals"
+                ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold"
+                : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+            <span>Appeals</span>
+            {appeals.filter((a) => a.status === "pending").length > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                {appeals.filter((a) => a.status === "pending").length}
+              </span>
+            ) : appeals.length > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                {appeals.length}
+              </span>
+            ) : null}
           </button>
         </div>
 
@@ -758,6 +793,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {/* TAB 4: Deactivation Appeals */}
+          {activeTab === "appeals" && (
+            <AdminAppeals
+              currentUser={currentUser}
+              liveUsers={users}
+              onNavigateToUsers={() => setActiveTab("users")}
+            />
           )}
 
         </div>

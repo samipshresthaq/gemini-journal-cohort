@@ -21,6 +21,9 @@ import {
   AdminAnalyticsData,
   DailySignupMetric,
   GeminiUsageMetric,
+  DeactivationAppeal,
+  AppealStatus,
+  AppealReply,
 } from "../types";
 import { sanitizeForFirestore } from "./firestoreService";
 
@@ -108,8 +111,10 @@ export async function seedDefaultAdminAndDirectory(currentUser?: AuthUser | null
 
     // 1. Fetch bootstrap metadata from Secret Manager API first
     const bootstrapConfig = await fetchBootstrapAdminProfile();
-    const adminEmail = (bootstrapConfig.adminEmail || "admin@geminijournal.app").toLowerCase().trim();
-    registerKnownAdminEmail(adminEmail);
+    const adminEmail = (bootstrapConfig.adminEmail || "").toLowerCase().trim();
+    if (adminEmail) {
+      registerKnownAdminEmail(adminEmail);
+    }
 
     // 2. Only attempt Firestore operations if an authenticated Firebase user is signed in
     if (!auth.currentUser) {
@@ -146,50 +151,6 @@ export async function seedDefaultAdminAndDirectory(currentUser?: AuthUser | null
           role: "admin",
           assignedAt: Date.now(),
         }, { merge: true });
-
-        // Seed initial demo member users
-        const sampleUsers: UserProfile[] = [
-          {
-            uid: "usr_marcus_chen",
-            email: "marcus.chen@example.com",
-            displayName: "Marcus Chen",
-            photoURL: null,
-            role: "user",
-            status: "active",
-            createdAt: Date.now() - 10 * 86400000,
-            lastLoginAt: Date.now() - 2 * 86400000,
-            entryCount: 14,
-          },
-          {
-            uid: "usr_sarah_jenkins",
-            email: "sarah.jenkins@example.com",
-            displayName: "Sarah Jenkins",
-            photoURL: null,
-            role: "user",
-            status: "active",
-            createdAt: Date.now() - 7 * 86400000,
-            lastLoginAt: Date.now() - 1 * 86400000,
-            entryCount: 8,
-          },
-          {
-            uid: "usr_alex_rivera",
-            email: "alex.rivera@example.com",
-            displayName: "Alex Rivera",
-            photoURL: null,
-            role: "user",
-            status: "deactivated",
-            createdAt: Date.now() - 20 * 86400000,
-            lastLoginAt: Date.now() - 5 * 86400000,
-            entryCount: 3,
-            deactivatedAt: Date.now() - 2 * 86400000,
-            deactivatedBy: "system_security",
-            deactivationReason: "Account flagged for security review pending verification",
-          },
-        ];
-
-        for (const sample of sampleUsers) {
-          await setDoc(doc(db, "users", sample.uid), sanitizeForFirestore(sample), { merge: true });
-        }
 
         // Initial audit log
         await logAdminAuditAction({
@@ -230,7 +191,7 @@ export async function syncUserProfile(user: AuthUser): Promise<UserProfile> {
   if (!user.uid || user.uid.startsWith("guest_")) {
     return {
       uid: user.uid,
-      email: user.email || "guest@geminijournal.app",
+      email: user.email || "",
       displayName: user.displayName || "Guest",
       role: "user",
       status: "active",
@@ -243,7 +204,7 @@ export async function syncUserProfile(user: AuthUser): Promise<UserProfile> {
   if (!auth.currentUser) {
     return {
       uid: user.uid,
-      email: user.email || "user@geminijournal.app",
+      email: user.email || "",
       displayName: user.displayName || "Journal User",
       role: user.role || (isSystemAdminEmail(user.email) ? "admin" : "user"),
       status: user.status || "active",
@@ -287,7 +248,7 @@ export async function syncUserProfile(user: AuthUser): Promise<UserProfile> {
     } else {
       const newProfile: UserProfile = {
         uid: user.uid,
-        email: user.email || "user@geminijournal.app",
+        email: user.email || "",
         displayName: user.displayName || (user.email ? user.email.split("@")[0] : "Journal User"),
         photoURL: user.photoURL || null,
         role: isBootstrappedAdmin ? "admin" : "user",
@@ -313,7 +274,7 @@ export async function syncUserProfile(user: AuthUser): Promise<UserProfile> {
     console.warn("User profile sync notice:", err);
     return {
       uid: user.uid,
-      email: user.email || "user@geminijournal.app",
+      email: user.email || "",
       displayName: user.displayName || "Journal User",
       role: user.role || (isSystemAdminEmail(user.email) ? "admin" : "user"),
       status: user.status || "active",
@@ -324,64 +285,98 @@ export async function syncUserProfile(user: AuthUser): Promise<UserProfile> {
 }
 
 /**
+ * Parse any timestamp representation (number, Firestore Timestamp, ISO string) safely
+ */
+export function parseFirestoreTimestamp(val: any): number {
+  if (!val) return Date.now();
+  if (typeof val === "number") return val;
+  if (typeof val?.toMillis === "function") return val.toMillis();
+  if (typeof val?.toDate === "function") return val.toDate().getTime();
+  if (typeof val?.seconds === "number") return val.seconds * 1000;
+  const parsed = new Date(val).getTime();
+  return isNaN(parsed) ? Date.now() : parsed;
+}
+
+/**
  * Real-time subscription to the User Directory for Administrators
  */
 export function subscribeToUserDirectory(
   onUpdate: (users: UserProfile[]) => void,
-  onError: (error: Error) => void
+  onError?: (error: Error) => void
 ): Unsubscribe {
-  // If no auth.currentUser in Firebase SDK, fetch directly from backend API
+  // Only attach live Firestore snapshot if authenticated in Firebase Auth
   if (!auth.currentUser) {
     fetch("/api/admin/users")
       .then((res) => (res.ok ? res.json() : []))
-      .then((users) => onUpdate(users))
-      .catch((err) => {
-        console.warn("Backend user directory fallback notice:", err);
-        onUpdate([]);
-      });
+      .then((fallbackUsers) => {
+        if (fallbackUsers && fallbackUsers.length > 0) {
+          onUpdate(fallbackUsers);
+        }
+      })
+      .catch(() => {});
     return () => {};
   }
 
   const usersCollection = collection(db, "users");
-  const q = query(usersCollection, orderBy("createdAt", "desc"));
 
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const users: UserProfile[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        users.push({
-          uid: docSnap.id,
-          email: data.email || "Unknown",
-          displayName: data.displayName || null,
-          photoURL: data.photoURL || null,
-          role: data.role || "user",
-          status: data.status || "active",
-          createdAt: data.createdAt || Date.now(),
-          lastLoginAt: data.lastLoginAt || Date.now(),
-          entryCount: data.entryCount,
-          deactivatedAt: data.deactivatedAt,
-          deactivatedBy: data.deactivatedBy,
-          deactivationReason: data.deactivationReason,
-        });
+  const processUserDocs = (snapshot: any) => {
+    const list: UserProfile[] = [];
+    snapshot.forEach((docSnap: any) => {
+      const data = docSnap.data() || {};
+      list.push({
+        uid: docSnap.id,
+        email: data.email || "",
+        displayName: data.displayName || data.name || (data.email ? data.email.split("@")[0] : "Journal User"),
+        photoURL: data.photoURL || data.avatarUrl || null,
+        role: data.role === "admin" ? "admin" : "user",
+        status: data.status === "deactivated" ? "deactivated" : "active",
+        createdAt: parseFirestoreTimestamp(data.createdAt),
+        lastLoginAt: parseFirestoreTimestamp(data.lastLoginAt),
+        entryCount: typeof data.entryCount === "number" ? data.entryCount : undefined,
+        deactivatedAt: data.deactivatedAt ? parseFirestoreTimestamp(data.deactivatedAt) : undefined,
+        deactivatedBy: data.deactivatedBy,
+        deactivationReason: data.deactivationReason,
       });
-      onUpdate(users);
+    });
+    // Sort in memory by createdAt descending
+    list.sort((a, b) => (b.createdAt || b.lastLoginAt || 0) - (a.createdAt || a.lastLoginAt || 0));
+    onUpdate(list);
+  };
+
+  // Immediate getDocs fetch for instant rendering from database
+  getDocs(usersCollection)
+    .then((snap) => {
+      if (!snap.empty) {
+        processUserDocs(snap);
+      }
+    })
+    .catch((err) => {
+      console.warn("Initial getDocs users notice:", err.message);
+    });
+
+  // Real-time onSnapshot listener on the users collection
+  const unsubscribe = onSnapshot(
+    usersCollection,
+    (snapshot) => {
+      processUserDocs(snapshot);
     },
     async (err) => {
-      // If Firestore reports insufficient permissions, fall back to backend API cleanly
+      console.warn("[Admin Notice] User directory stream notice:", err.message);
       try {
         const res = await fetch("/api/admin/users");
         if (res.ok) {
           const fallbackUsers = await res.json();
-          onUpdate(fallbackUsers);
-          return;
+          if (fallbackUsers && fallbackUsers.length > 0) {
+            onUpdate(fallbackUsers);
+            return;
+          }
         }
       } catch (_) {}
-      console.warn("[Admin Notice] User directory falling back:", err.message);
-      onError(err);
+      if (onError) onError(err);
     }
   );
+
+  return unsubscribe;
 }
 
 // Alias for backwards compatibility
@@ -409,13 +404,14 @@ export async function setUserAccountStatus(
     throw new Error("Security Guard: You cannot deactivate your own active administrator account.");
   }
 
-  // Also update backend server memory store
+  // Also update backend server memory store & dispatch automated status notification email
   try {
     await fetch("/api/admin/user-status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         targetUid,
+        targetEmail,
         newStatus,
         reason,
         adminEmail: adminUser.email,
@@ -663,71 +659,545 @@ export async function fetchAdminAnalytics(days: number = 14, liveUsers?: UserPro
   } catch (err: any) {
     console.warn("Failed to fetch admin metrics from server:", err);
 
-    // Resilient fallback calculation
+    // Return clean zero/empty metrics calculated strictly from live database state
     const now = Date.now();
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const dailySignups: DailySignupMetric[] = [];
     const dailyAiUsage: GeminiUsageMetric[] = [];
 
-    let cumUsers = liveUsers?.length || 48;
+    const activeCount = liveUsers ? liveUsers.filter((u) => u.status === "active").length : 0;
+    const deactivatedCount = liveUsers ? liveUsers.filter((u) => u.status === "deactivated").length : 0;
+    const adminCount = liveUsers ? liveUsers.filter((u) => u.role === "admin").length : 0;
+    const totalCount = liveUsers ? liveUsers.length : 0;
+
+    let runningCum = 0;
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(now - i * 86400000);
       const dateFormatted = `${monthNames[d.getMonth()]} ${d.getDate()}`;
       const fullDate = d.toISOString().split("T")[0];
-      const count = Math.max(1, Math.round(2 + Math.sin(i * 0.7) * 2));
-      cumUsers += count;
+      
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const dayEnd = dayStart + 86400000;
+      const count = liveUsers ? liveUsers.filter((u) => u.createdAt >= dayStart && u.createdAt < dayEnd).length : 0;
+      runningCum += count;
 
       dailySignups.push({
         date: dateFormatted,
         fullDate,
         timestamp: d.getTime(),
         count,
-        cumulativeCount: cumUsers,
+        cumulativeCount: runningCum,
       });
-
-      const requestsCount = Math.round(8 + Math.random() * 8);
-      const inputTokens = requestsCount * 520;
-      const outputTokens = requestsCount * 280;
-      const totalTokens = inputTokens + outputTokens;
-      const costUsd = Math.round((inputTokens * (0.075 / 1000000) + outputTokens * (0.30 / 1000000)) * 100000) / 100000;
 
       dailyAiUsage.push({
         date: dateFormatted,
         fullDate,
         timestamp: d.getTime(),
-        requestsCount,
-        inputTokens,
-        outputTokens,
-        totalTokens,
-        costUsd,
-        avgLatencyMs: Math.round(500 + Math.random() * 400),
+        requestsCount: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        costUsd: 0,
+        avgLatencyMs: 0,
       });
     }
 
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todaySignups = dailySignups.find((d) => d.fullDate === todayStr)?.count || 0;
+    const weekSignups = dailySignups.slice(-7).reduce((s, d) => s + d.count, 0);
+
     return {
-      totalUsers: cumUsers,
-      activeUsers: Math.round(cumUsers * 0.95),
-      deactivatedUsers: Math.max(1, Math.round(cumUsers * 0.05)),
-      adminUsers: 3,
-      todaySignups: 4,
-      weekSignups: 22,
-      totalAiRequests: dailyAiUsage.reduce((s, d) => s + d.requestsCount, 0),
-      totalAiTokens: dailyAiUsage.reduce((s, d) => s + d.totalTokens, 0),
-      totalAiCostUsd: Math.round(dailyAiUsage.reduce((s, d) => s + d.costUsd, 0) * 10000) / 10000,
+      totalUsers: totalCount,
+      activeUsers: activeCount,
+      deactivatedUsers: deactivatedCount,
+      adminUsers: adminCount,
+      todaySignups,
+      weekSignups,
+      totalAiRequests: 0,
+      totalAiTokens: 0,
+      totalAiCostUsd: 0,
       dailySignups,
       dailyAiUsage,
-      modelBreakdown: [
-        { model: "gemini-3.6-flash", requests: 78, tokens: 62400, costUsd: 0.0234, percentage: 65 },
-        { model: "gemini-3.1-flash-lite", requests: 26, tokens: 19500, costUsd: 0.0073, percentage: 20 },
-        { model: "gemini-flash-latest", requests: 18, tokens: 14400, costUsd: 0.0054, percentage: 15 },
-      ],
-      featureBreakdown: [
-        { feature: "Reflection Chat", endpoint: "/api/gemini/reflect", requests: 64, tokens: 51200, costUsd: 0.0192 },
-        { feature: "Session Synthesis", endpoint: "/api/gemini/summarize", requests: 28, tokens: 34400, costUsd: 0.0129 },
-        { feature: "Voice Transcription", endpoint: "/api/gemini/transcribe", requests: 18, tokens: 25200, costUsd: 0.0095 },
-        { feature: "Weekly Digest", endpoint: "/api/gemini/digest-synthesis", requests: 12, tokens: 54600, costUsd: 0.0205 },
-      ],
+      modelBreakdown: [],
+      featureBreakdown: [],
       recentLogs: [],
     };
   }
 }
+
+/**
+ * Submit a deactivation appeal: writes to Firestore collection 'appeals'
+ * and dispatches to server for email notification and fallback persistence
+ */
+export async function submitDeactivationAppeal(appealData: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  subject: string;
+  message: string;
+  deactivationReason?: string;
+}): Promise<DeactivationAppeal> {
+  const cleanUid = appealData.userId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "user";
+  const appealId = `appeal_${Date.now()}_${cleanUid}`;
+  const appealRecord: DeactivationAppeal = {
+    id: appealId,
+    userId: appealData.userId,
+    userEmail: appealData.userEmail,
+    userName: appealData.userName || appealData.userEmail.split("@")[0] || "Journal Writer",
+    subject: appealData.subject || "Request for Account Reactivation",
+    message: appealData.message.trim(),
+    deactivationReason: appealData.deactivationReason || "Administrative hold",
+    status: "pending",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  // 1. Direct write to Firestore collection "appeals"
+  try {
+    const appealRef = doc(db, "appeals", appealId);
+    await setDoc(appealRef, sanitizeForFirestore(appealRecord));
+
+    // Also write initial message to subcollection for threaded conversation
+    const initialMsgRef = doc(db, "appeals", appealId, "messages", "init");
+    await setDoc(
+      initialMsgRef,
+      sanitizeForFirestore({
+        id: "init",
+        senderEmail: appealRecord.userEmail,
+        senderName: appealRecord.userName,
+        senderRole: "user",
+        message: appealRecord.message,
+        sentAt: appealRecord.createdAt,
+      })
+    );
+  } catch (fsErr) {
+    console.warn("[Firestore] Direct write for appeal failed (will persist via backend):", fsErr);
+  }
+
+  // 2. Dispatch to backend API for admin notification and backup storage
+  try {
+    const res = await fetch("/api/support/contact-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...appealData,
+        appealId,
+      }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.warn("[Support API] Notice:", errData);
+    }
+  } catch (netErr) {
+    console.warn("[Support API] Network notice:", netErr);
+  }
+
+  return appealRecord;
+}
+
+/**
+ * Fetch all appeals from the server backend
+ */
+export async function fetchAppealsFromBackend(): Promise<DeactivationAppeal[]> {
+  try {
+    const res = await fetch("/api/admin/appeals");
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Real-time subscription to Deactivation Appeals from Firestore with automatic REST fallback
+ */
+export function subscribeToAppeals(
+  onUpdate: (appeals: DeactivationAppeal[]) => void,
+  onError?: (err: any) => void
+): Unsubscribe {
+  let isFirestoreActive = false;
+  let unsubscribeFirestore: Unsubscribe = () => {};
+
+  // If not authenticated in Firebase Auth, stream or poll via backend REST API without triggering Firestore permission-denied
+  if (!auth.currentUser) {
+    fetchAppealsFromBackend()
+      .then((serverAppeals) => {
+        if (serverAppeals && serverAppeals.length > 0) {
+          onUpdate(serverAppeals);
+        }
+      })
+      .catch(() => {});
+    return () => {};
+  }
+
+  try {
+    const appealsCol = collection(db, "appeals");
+    const q = query(appealsCol, orderBy("createdAt", "desc"));
+
+    unsubscribeFirestore = onSnapshot(
+      q,
+      (snapshot) => {
+        isFirestoreActive = true;
+        const appeals: DeactivationAppeal[] = [];
+        snapshot.forEach((d) => {
+          appeals.push({ ...d.data(), id: d.id } as DeactivationAppeal);
+        });
+        onUpdate(appeals);
+      },
+      (err) => {
+        console.warn("[Firestore] Appeals stream error, falling back to REST:", err);
+        if (onError) onError(err);
+        fetchAppealsFromBackend().then(onUpdate).catch(() => {});
+      }
+    );
+  } catch (err) {
+    console.warn("[Firestore] Could not initiate appeals snapshot:", err);
+    fetchAppealsFromBackend().then(onUpdate).catch(() => {});
+  }
+
+  // Poll backend immediately to ensure offline or server-held appeals are visible
+  fetchAppealsFromBackend()
+    .then((serverAppeals) => {
+      if (!isFirestoreActive && serverAppeals.length > 0) {
+        onUpdate(serverAppeals);
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    unsubscribeFirestore();
+  };
+}
+
+/**
+ * Fetch the latest appeal submitted by a specific user (if any)
+ */
+export async function fetchUserAppeal(userId: string): Promise<DeactivationAppeal | null> {
+  try {
+    const appealsCol = collection(db, "appeals");
+    const snap = await getDocs(appealsCol);
+    const userAppeals = snap.docs
+      .map((d) => ({ ...d.data(), id: d.id } as DeactivationAppeal))
+      .filter((a) => a.userId === userId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    if (userAppeals.length > 0) {
+      return userAppeals[0];
+    }
+  } catch (err) {
+    console.warn("[Firestore] Could not query user appeal:", err);
+  }
+
+  try {
+    const serverAppeals = await fetchAppealsFromBackend();
+    const userAppeals = serverAppeals
+      .filter((a) => a.userId === userId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return userAppeals[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Real-time subscription to a user's appeal in Firestore
+ */
+export function subscribeToUserAppeal(
+  userId: string,
+  onUpdate: (appeal: DeactivationAppeal | null) => void,
+  onError?: (err: any) => void
+): Unsubscribe {
+  if (!userId) {
+    onUpdate(null);
+    return () => {};
+  }
+
+  // If not authenticated in Firebase Auth, fall back to polling backend
+  if (!auth.currentUser) {
+    fetchAppealsFromBackend()
+      .then((serverAppeals) => {
+        const matched = serverAppeals
+          .filter((a) => a.userId === userId)
+          .sort((a, b) => b.createdAt - a.createdAt);
+        onUpdate(matched[0] || null);
+      })
+      .catch(() => onUpdate(null));
+    return () => {};
+  }
+
+  try {
+    const appealsCol = collection(db, "appeals");
+    const q = query(appealsCol, orderBy("createdAt", "desc"));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const userAppeals: DeactivationAppeal[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data();
+          if (data.userId === userId) {
+            userAppeals.push({ ...data, id: d.id } as DeactivationAppeal);
+          }
+        });
+        userAppeals.sort((a, b) => b.createdAt - a.createdAt);
+        onUpdate(userAppeals[0] || null);
+      },
+      (err) => {
+        console.warn("[Firestore] User appeal stream notice:", err?.message);
+        if (onError) onError(err);
+        fetchAppealsFromBackend()
+          .then((serverAppeals) => {
+            const matched = serverAppeals
+              .filter((a) => a.userId === userId)
+              .sort((a, b) => b.createdAt - a.createdAt);
+            onUpdate(matched[0] || null);
+          })
+          .catch(() => {});
+      }
+    );
+  } catch (err) {
+    console.warn("[Firestore] Could not attach user appeal snapshot:", err);
+    return () => {};
+  }
+}
+
+/**
+ * Update the status of an appeal (e.g. approved, rejected, reviewed)
+ * If status is 'approved', also reactivates the user in Firestore & backend.
+ */
+export async function updateAppealStatus(
+  adminUser: AuthUser,
+  appeal: DeactivationAppeal,
+  newStatus: AppealStatus,
+  adminNotes?: string
+): Promise<void> {
+  const updatedData: Partial<DeactivationAppeal> = {
+    status: newStatus,
+    adminNotes: adminNotes || appeal.adminNotes || "",
+    reviewedBy: adminUser.email || adminUser.displayName || adminUser.uid,
+    reviewedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  // 1. Update in Firestore
+  try {
+    const appealRef = doc(db, "appeals", appeal.id);
+    await updateDoc(appealRef, sanitizeForFirestore(updatedData));
+  } catch (fsErr) {
+    console.warn("[Firestore] Failed to update appeal doc:", fsErr);
+  }
+
+  // 2. Update via server endpoint
+  try {
+    await fetch(`/api/admin/appeals/${appeal.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: newStatus,
+        adminNotes: adminNotes || appeal.adminNotes,
+        adminEmail: adminUser.email,
+        userId: appeal.userId,
+        userEmail: appeal.userEmail,
+        reactivateUser: newStatus === "approved",
+      }),
+    });
+  } catch (netErr) {
+    console.warn("[Admin API] Failed to update appeal on server:", netErr);
+  }
+
+  // 3. If approved, reactivate the user in Firestore directly
+  if (newStatus === "approved" && appeal.userId) {
+    try {
+      await setUserAccountStatus(
+        adminUser,
+        appeal.userId,
+        appeal.userEmail,
+        "active"
+      );
+    } catch (actErr) {
+      console.warn("Could not automatically reactivate user document:", actErr);
+    }
+  }
+}
+
+/**
+ * Delete an appeal
+ */
+export async function deleteAppeal(appealId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, "appeals", appealId));
+  } catch (err) {
+    console.warn("[Firestore] Could not delete appeal doc:", err);
+  }
+  try {
+    await fetch(`/api/admin/appeals/${appealId}`, { method: "DELETE" });
+  } catch (err) {
+    console.warn("[Admin API] Could not delete appeal from server:", err);
+  }
+}
+
+/**
+ * Fetch a single appeal by its unique ID
+ */
+export async function fetchAppealById(appealId: string): Promise<DeactivationAppeal | null> {
+  try {
+    const appealDoc = await getDoc(doc(db, "appeals", appealId));
+    if (appealDoc.exists()) {
+      return { ...appealDoc.data(), id: appealDoc.id } as DeactivationAppeal;
+    }
+  } catch (err) {
+    console.warn("[Firestore] Could not fetch appeal by ID:", err);
+  }
+
+  try {
+    const serverAppeals = await fetchAppealsFromBackend();
+    const matched = serverAppeals.find((a) => a.id === appealId);
+    return matched || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Send an official admin reply to an appeal, dispatched directly to the user's email
+ */
+export async function replyToAppeal(
+  adminUser: AuthUser,
+  appeal: DeactivationAppeal,
+  replyMessage: string
+): Promise<AppealReply> {
+  const newReply: AppealReply = {
+    id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    senderEmail: adminUser.email || "",
+    senderName: adminUser.displayName || adminUser.email?.split("@")[0] || "System Administrator",
+    senderRole: "admin",
+    message: replyMessage.trim(),
+    sentAt: Date.now(),
+    emailDispatched: false,
+  };
+
+  // 1. Dispatch through server endpoint which fires the Nodemailer email
+  try {
+    const resp = await fetch(`/api/admin/appeals/${appeal.id}/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        replyMessage: replyMessage.trim(),
+        adminEmail: adminUser.email,
+        adminName: adminUser.displayName || adminUser.email?.split("@")[0] || "System Administrator",
+        userEmail: appeal.userEmail,
+        userName: appeal.userName,
+        userId: appeal.userId,
+        appealSubject: appeal.subject,
+        originalAppealMessage: appeal.message,
+      }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.reply) {
+        newReply.id = data.reply.id || newReply.id;
+        newReply.emailDispatched = data.reply.emailDispatched ?? true;
+      }
+    }
+  } catch (netErr) {
+    console.warn("[Admin API] Failed to send appeal reply via server:", netErr);
+  }
+
+  // 2. Persist reply to Firestore document & message subcollection
+  try {
+    const appealRef = doc(db, "appeals", appeal.id);
+    const existingReplies = appeal.replies || [];
+    const updatedReplies = [...existingReplies, newReply];
+    const newStatus: AppealStatus = appeal.status === "pending" ? "reviewed" : appeal.status;
+
+    await updateDoc(
+      appealRef,
+      sanitizeForFirestore({
+        replies: updatedReplies,
+        updatedAt: Date.now(),
+        status: newStatus,
+        reviewedBy: adminUser.email || adminUser.displayName || "Admin",
+        reviewedAt: Date.now(),
+      })
+    );
+
+    // Also persist in threaded conversation subcollection
+    const msgRef = doc(db, "appeals", appeal.id, "messages", newReply.id);
+    await setDoc(msgRef, sanitizeForFirestore(newReply));
+  } catch (fsErr) {
+    console.warn("[Firestore] Failed to update appeal document with reply:", fsErr);
+  }
+
+  // 3. Log administrative audit action
+  await logAdminAuditAction({
+    adminUid: adminUser.uid,
+    adminEmail: adminUser.email || "admin",
+    targetUid: appeal.userId,
+    targetEmail: appeal.userEmail,
+    action: "role_change",
+    details: `Admin replied to appeal #${appeal.id}: "${replyMessage.slice(0, 60)}..." (Email dispatched: ${newReply.emailDispatched})`,
+  });
+
+  return newReply;
+}
+
+/**
+ * User sends a follow-up reply in an ongoing appeal conversation
+ * Persists directly to Firestore 'appeals/{appealId}' and 'appeals/{appealId}/messages/{replyId}'
+ */
+export async function sendUserAppealReply(
+  user: AuthUser,
+  appeal: DeactivationAppeal,
+  replyMessage: string
+): Promise<AppealReply> {
+  const newReply: AppealReply = {
+    id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    senderEmail: user.email || appeal.userEmail,
+    senderName: user.displayName || user.email?.split("@")[0] || appeal.userName || "User",
+    senderRole: "user",
+    message: replyMessage.trim(),
+    sentAt: Date.now(),
+    emailDispatched: false,
+  };
+
+  const updatedReplies = [...(appeal.replies || []), newReply];
+
+  // 1. Direct write to Firestore document
+  try {
+    const appealRef = doc(db, "appeals", appeal.id);
+    await updateDoc(
+      appealRef,
+      sanitizeForFirestore({
+        replies: updatedReplies,
+        updatedAt: Date.now(),
+      })
+    );
+
+    // Also persist in threaded messages subcollection
+    const msgRef = doc(db, "appeals", appeal.id, "messages", newReply.id);
+    await setDoc(msgRef, sanitizeForFirestore(newReply));
+  } catch (fsErr) {
+    console.warn("[Firestore] User reply write failed, using backend:", fsErr);
+  }
+
+  // 2. Dispatch to backend for admin alert & sync
+  try {
+    await fetch(`/api/support/appeal-reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        appealId: appeal.id,
+        reply: newReply,
+        userEmail: user.email || appeal.userEmail,
+        userName: user.displayName || appeal.userName,
+        subject: appeal.subject,
+      }),
+    });
+  } catch (netErr) {
+    console.warn("[Backend API] User reply notification notice:", netErr);
+  }
+
+  return newReply;
+}
+
+

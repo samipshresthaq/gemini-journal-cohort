@@ -47,6 +47,56 @@
         "timestamp": { "type": "number" }
       },
       "required": ["id", "adminUid", "adminEmail", "targetUid", "targetEmail", "action", "timestamp"]
+    },
+    "DeactivationAppeal": {
+      "title": "DeactivationAppeal",
+      "description": "Appeal submitted by deactivated user requesting account review and reactivation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "deactivationReason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "approved", "rejected"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "reviewedBy": { "type": "string" },
+        "reviewedAt": { "type": "number" },
+        "adminNotes": { "type": "string" }
+      },
+      "required": ["id", "userId", "userEmail", "subject", "message", "status", "createdAt"]
+    },
+    "AppealMessage": {
+      "title": "AppealMessage",
+      "description": "Individual message in an appeal conversation thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["admin", "user"] },
+        "message": { "type": "string" },
+        "sentAt": { "type": "number" },
+        "emailDispatched": { "type": "boolean" }
+      },
+      "required": ["id", "senderEmail", "senderName", "message", "sentAt"]
+    },
+    "UserConversation": {
+      "title": "UserConversation",
+      "description": "Conversation thread between user and Gemini assistant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "entryId": { "type": "string" },
+        "title": { "type": "string" },
+        "messages": { "type": "array" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "messages", "updatedAt"]
     }
   },
   "firestore": {
@@ -58,6 +108,10 @@
       "schema": "JournalEntry",
       "description": "User reflections subcollection"
     },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": "UserConversation",
+      "description": "User reflection conversations"
+    },
     "/admin_audit_logs/{logId}": {
       "schema": "AdminAuditLog",
       "description": "Immutable log of administrative actions"
@@ -65,6 +119,14 @@
     "/admins/{adminId}": {
       "schema": "UserProfile",
       "description": "Admin authorization reference marker"
+    },
+    "/appeals/{appealId}": {
+      "schema": "DeactivationAppeal",
+      "description": "User appeals for deactivated account reactivation"
+    },
+    "/appeals/{appealId}/messages/{messageId}": {
+      "schema": "AppealMessage",
+      "description": "Threaded conversation messages for account appeal"
     }
   }
 }

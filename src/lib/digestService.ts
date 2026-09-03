@@ -1,5 +1,5 @@
 import { doc, setDoc, getDoc, collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
-import { db, getGoogleAccessToken, authorizeGmailAccess } from "../firebase";
+import { db, auth, getGoogleAccessToken, authorizeGmailAccess } from "../firebase";
 import { AuthUser, JournalEntry, WeeklyDigest, WeeklyDigestSettings } from "../types";
 import { sanitizeForFirestore } from "./firestoreService";
 
@@ -491,7 +491,7 @@ export function subscribeToUserDigests(
   onUpdate: (digests: WeeklyDigest[]) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  if (!userId || userId.startsWith("guest_")) {
+  if (!userId || userId.startsWith("guest_") || !auth.currentUser || auth.currentUser.uid !== userId) {
     onUpdate([]);
     return () => {};
   }

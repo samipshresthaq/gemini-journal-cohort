@@ -7,6 +7,12 @@ import rateLimit from "express-rate-limit";
 import nodemailer from "nodemailer";
 import cron from "node-cron";
 import { accessSecret, getAdminCredentials } from "./serverSecrets";
+import {
+  generateWeeklyDigestHtml,
+  generateAccountStatusEmail,
+  generateReactivationAppealEmail,
+  generateAdminAppealReplyEmail,
+} from "./src/server/emails";
 
 dotenv.config();
 
@@ -62,190 +68,32 @@ function createEmailTransporter() {
 const mailTransporter = createEmailTransporter();
 
 /**
- * Generate beautifully formatted, responsive HTML email template for Weekly Digest
+ * Send an email notification safely (using Nodemailer with stream fallback)
  */
-function generateWeeklyDigestHtml(params: {
-  userName: string;
-  userEmail: string;
-  startDate: string;
-  endDate: string;
-  entryCount: number;
-  digest: {
-    title: string;
-    overview: string;
-    emotionalArc: string;
-    keyThemes: string[];
-    topInsights: string[];
-    growthActions: string[];
-    gratitudeHighlights: string[];
-  };
-}): string {
-  const { userName, userEmail, startDate, endDate, entryCount, digest } = params;
+async function sendSystemEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<{ success: boolean; messageId?: string }> {
+  try {
+    const { to, subject, html, text } = params;
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"Gemini Reflection Journal"',
+      to,
+      subject,
+      html,
+      text: text || subject,
+    };
 
-  const themeBadges = (digest.keyThemes || [])
-    .map(
-      (theme) =>
-        `<span style="display:inline-block;padding:4px 12px;margin:3px 4px 3px 0;background-color:#EEF2FF;color:#4F46E5;border-radius:16px;font-size:12px;font-weight:600;">${theme}</span>`
-    )
-    .join("");
-
-  const insightsList = (digest.topInsights || [])
-    .map(
-      (insight) =>
-        `<li style="margin-bottom:10px;line-height:1.6;color:#334155;"><strong style="color:#0F172A;">💡</strong> ${insight}</li>`
-    )
-    .join("");
-
-  const actionsList = (digest.growthActions || [])
-    .map(
-      (action) =>
-        `<li style="margin-bottom:10px;line-height:1.6;color:#334155;"><strong style="color:#10B981;">✓</strong> ${action}</li>`
-    )
-    .join("");
-
-  const gratitudeList = (digest.gratitudeHighlights || [])
-    .map(
-      (item) =>
-        `<li style="margin-bottom:8px;line-height:1.6;color:#334155;"><strong style="color:#F59E0B;">✦</strong> ${item}</li>`
-    )
-    .join("");
-
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Weekly Reflection Digest</title>
-</head>
-<body style="margin:0;padding:0;background-color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1E293B;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8FAFC;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="100%" max-width="620" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background-color:#FFFFFF;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.05);border:1px solid #E2E8F0;">
-          
-          <!-- Header Banner -->
-          <tr>
-            <td style="background:linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #8B5CF6 100%);padding:36px 32px;text-align:center;color:#FFFFFF;">
-              <div style="font-size:26px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;">✨ Weekly Reflection Digest</div>
-              <div style="font-size:14px;opacity:0.9;font-weight:500;">Saturday Edition • ${startDate} – ${endDate}</div>
-              <div style="display:inline-block;margin-top:16px;background:rgba(255,255,255,0.2);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:0.3px;">
-                ${entryCount} Reflections Synthesized This Week
-              </div>
-            </td>
-          </tr>
-
-          <!-- Main Content -->
-          <tr>
-            <td style="padding:32px 28px;">
-              <p style="font-size:16px;line-height:1.6;margin-top:0;color:#334155;">
-                Hello <strong>${userName}</strong>,
-              </p>
-              <p style="font-size:15px;line-height:1.6;color:#475569;margin-bottom:24px;">
-                Every Saturday, your AI Journal analyzes your entries to surface meaningful patterns, emotional growth, and practical intentions for the week ahead. Here is your weekly synthesis:
-              </p>
-
-              <!-- Highlight Title Card -->
-              <div style="background-color:#F8FAFC;border-left:4px solid #6366F1;padding:18px 20px;border-radius:12px;margin-bottom:24px;">
-                <div style="font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;color:#6366F1;margin-bottom:4px;">Weekly Theme</div>
-                <div style="font-size:18px;font-weight:700;color:#0F172A;margin-bottom:8px;">${digest.title}</div>
-                <div style="font-size:14px;line-height:1.6;color:#475569;">${digest.overview}</div>
-              </div>
-
-              <!-- Emotional Arc & Themes -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                <tr>
-                  <td style="padding-bottom:12px;">
-                    <div style="font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Emotional Trajectory</div>
-                    <div style="background:#FEF3C7;color:#92400E;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid #FDE68A;">
-                      🌿 ${digest.emotionalArc}
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div style="font-size:13px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Core Themes Explored</div>
-                    <div>${themeBadges}</div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Top Insights -->
-              ${
-                digest.topInsights && digest.topInsights.length > 0
-                  ? `
-              <div style="margin-bottom:24px;">
-                <div style="font-size:15px;font-weight:700;color:#0F172A;margin-bottom:12px;display:flex;align-items:center;">
-                  Key Breakthroughs & Insights
-                </div>
-                <ul style="margin:0;padding-left:20px;font-size:14px;">
-                  ${insightsList}
-                </ul>
-              </div>`
-                  : ""
-              }
-
-              <!-- Action Items for Next Week -->
-              ${
-                digest.growthActions && digest.growthActions.length > 0
-                  ? `
-              <div style="background-color:#F0FDF4;border:1px solid #DCFCE7;border-radius:14px;padding:20px;margin-bottom:24px;">
-                <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:12px;">
-                  🌱 Mindful Intentions for Next Week
-                </div>
-                <ul style="margin:0;padding-left:20px;font-size:14px;">
-                  ${actionsList}
-                </ul>
-              </div>`
-                  : ""
-              }
-
-              <!-- Gratitude Highlights -->
-              ${
-                digest.gratitudeHighlights && digest.gratitudeHighlights.length > 0
-                  ? `
-              <div style="background-color:#FFFBEB;border:1px solid #FEF3C7;border-radius:14px;padding:18px 20px;margin-bottom:28px;">
-                <div style="font-size:14px;font-weight:700;color:#92400E;margin-bottom:10px;">
-                  ✨ Highlights & Gratitude
-                </div>
-                <ul style="margin:0;padding-left:20px;font-size:13px;">
-                  ${gratitudeList}
-                </ul>
-              </div>`
-                  : ""
-              }
-
-              <!-- App Link Button -->
-              <div style="text-align:center;padding:12px 0 20px 0;">
-                <a href="${process.env.APP_URL || "https://ais-dev-cfsy4zwhedzflleyrowgf4-896719886324.asia-east1.run.app"}" target="_blank" style="display:inline-block;background-color:#4F46E5;color:#FFFFFF;text-decoration:none;padding:12px 28px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(79,70,229,0.3);">
-                  Open Your Journal & Reflect
-                </a>
-              </div>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color:#F1F5F9;padding:24px 28px;text-align:center;font-size:12px;color:#64748B;border-top:1px solid #E2E8F0;">
-              <p style="margin:0 0 6px 0;">
-                Sent to <strong>${userEmail}</strong> because you are a registered user of Gemini Reflection Journal.
-              </p>
-              <p style="margin:0;color:#94A3B8;">
-                Weekly digests are delivered automatically every Saturday. You can update your digest settings in your profile.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  `;
+    const info = await mailTransporter.sendMail(mailOptions);
+    console.log(`[Email Notification] Successfully dispatched to ${to}. ID:`, info.messageId || "stream-dispatched");
+    return { success: true, messageId: info.messageId || "stream-dispatched" };
+  } catch (error: any) {
+    console.warn(`[Email Notification Notice] Could not dispatch email to ${params.to}:`, error.message);
+    return { success: false };
+  }
 }
-
 
 /**
  * Gemini Token & Cost Telemetry Tracker
@@ -276,59 +124,8 @@ function calculateGeminiCost(model: string, inputTokens: number, outputTokens: n
   return Math.round(rawCost * 1000000) / 1000000;
 }
 
-// Generate realistic baseline history for past 14 days
-function generateSeedAiTelemetry(): AiLogEntry[] {
-  const logs: AiLogEntry[] = [];
-  const now = Date.now();
-  const models = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-flash-latest"];
-  const features = [
-    { name: "Reflection Chat", endpoint: "/api/gemini/reflect", inAvg: 480, outAvg: 320 },
-    { name: "Session Synthesis", endpoint: "/api/gemini/summarize", inAvg: 950, outAvg: 280 },
-    { name: "Voice Transcription", endpoint: "/api/gemini/transcribe", inAvg: 1200, outAvg: 220 },
-    { name: "Document Extraction", endpoint: "/api/gemini/extract-doc", inAvg: 2400, outAvg: 600 },
-    { name: "Weekly Digest", endpoint: "/api/gemini/digest-synthesis", inAvg: 3800, outAvg: 750 },
-  ];
-
-  // For each of the past 14 days
-  for (let dayOffset = 14; dayOffset >= 0; dayOffset--) {
-    const dayTimestamp = now - dayOffset * 86400000;
-    const dateObj = new Date(dayTimestamp);
-    const dateStr = dateObj.toISOString().split("T")[0];
-    
-    // 5 to 15 calls per day
-    const callsToday = 8 + Math.floor(Math.sin(dayOffset * 0.9) * 4) + (14 - dayOffset);
-    for (let c = 0; c < callsToday; c++) {
-      const feat = features[Math.floor(Math.random() * features.length)];
-      const model = models[Math.floor(Math.random() * models.length)];
-      const jitter = 0.8 + Math.random() * 0.4;
-      const inTokens = Math.round(feat.inAvg * jitter);
-      const outTokens = Math.round(feat.outAvg * jitter);
-      const totalTokens = inTokens + outTokens;
-      const cost = calculateGeminiCost(model, inTokens, outTokens);
-      const latency = Math.round(450 + Math.random() * 650);
-      const entryTime = dayTimestamp + Math.round((c / callsToday) * 72000000);
-
-      logs.push({
-        id: `ai_log_${entryTime}_${c}`,
-        timestamp: entryTime,
-        dateStr,
-        endpoint: feat.endpoint,
-        feature: feat.name,
-        modelUsed: model,
-        inputTokens: inTokens,
-        outputTokens: outTokens,
-        totalTokens,
-        costUsd: cost,
-        latencyMs: latency,
-        status: "success",
-      });
-    }
-  }
-
-  return logs.sort((a, b) => b.timestamp - a.timestamp);
-}
-
-const aiTelemetryLogs: AiLogEntry[] = generateSeedAiTelemetry();
+// Real-time In-Memory Ai Telemetry Logs from genuine runtime requests
+const aiTelemetryLogs: AiLogEntry[] = [];
 
 function recordAiTelemetry(entry: Omit<AiLogEntry, "id" | "dateStr">) {
   const dateStr = new Date(entry.timestamp).toISOString().split("T")[0];
@@ -899,7 +696,7 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
       }
 
       const mailOptions = {
-        from: process.env.SMTP_FROM || '"Gemini Reflection Journal" <journal@geminijournal.app>',
+        from: process.env.SMTP_FROM || '"Gemini Reflection Journal"',
         to: userEmail,
         subject: `✨ Your Weekly Reflection Digest: ${digest.title || "Weekly Synthesis"}`,
         html: htmlContent,
@@ -1030,76 +827,41 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
     }
   });
 
-  // Admin In-Memory Managed User Directory
-  let serverManagedUsers = [
-    {
-      uid: "admin_default_master",
-      email: "admin@geminijournal.app",
-      displayName: "System Administrator",
-      photoURL: null,
-      role: "admin",
-      status: "active",
-      createdAt: Date.now() - 30 * 86400000,
-      lastLoginAt: Date.now(),
-      entryCount: 24,
-    },
-    {
-      uid: "usr_marcus_chen",
-      email: "marcus.chen@example.com",
-      displayName: "Marcus Chen",
-      photoURL: null,
-      role: "user",
-      status: "active",
-      createdAt: Date.now() - 10 * 86400000,
-      lastLoginAt: Date.now() - 2 * 86400000,
-      entryCount: 14,
-    },
-    {
-      uid: "usr_sarah_jenkins",
-      email: "sarah.jenkins@example.com",
-      displayName: "Sarah Jenkins",
-      photoURL: null,
-      role: "user",
-      status: "active",
-      createdAt: Date.now() - 7 * 86400000,
-      lastLoginAt: Date.now() - 1 * 86400000,
-      entryCount: 8,
-    },
-    {
-      uid: "usr_alex_rivera",
-      email: "alex.rivera@example.com",
-      displayName: "Alex Rivera",
-      photoURL: null,
-      role: "user",
-      status: "deactivated",
-      createdAt: Date.now() - 20 * 86400000,
-      lastLoginAt: Date.now() - 5 * 86400000,
-      entryCount: 3,
-      deactivatedAt: Date.now() - 2 * 86400000,
-      deactivatedBy: "system_security",
-      deactivationReason: "Account flagged for security review pending verification",
-    },
-    {
-      uid: "usr_priya_sharma",
-      email: "priya.sharma@example.com",
-      displayName: "Priya Sharma",
-      photoURL: null,
-      role: "user",
-      status: "active",
-      createdAt: Date.now() - 4 * 86400000,
-      lastLoginAt: Date.now() - 12 * 3600000,
-      entryCount: 19,
-    },
-  ];
+  // Safe public endpoint providing administrator contact email for user appeals
+  app.get("/api/admin/info", async (_req: Request, res: Response) => {
+    try {
+      const adminCreds = await getAdminCredentials();
+      res.json({
+        adminEmail: adminCreds.adminEmail || "",
+        appName: "Gemini Reflection Journal",
+      });
+    } catch (error: any) {
+      res.json({
+        adminEmail: "",
+        appName: "Gemini Reflection Journal",
+      });
+    }
+  });
+
+  // Genuine Admin Managed Users list (empty by default; populated dynamically from real authentications and admin provisioning)
+  let serverManagedUsers: Array<{
+    uid: string;
+    email: string;
+    displayName: string | null;
+    photoURL: string | null;
+    role: "admin" | "user";
+    status: "active" | "deactivated";
+    createdAt: number;
+    lastLoginAt: number;
+    entryCount?: number;
+    deactivatedAt?: number;
+    deactivatedBy?: string;
+    deactivationReason?: string;
+  }> = [];
 
   // Admin User Directory listing
   app.get("/api/admin/users", async (_req: Request, res: Response) => {
     try {
-      const adminCreds = await getAdminCredentials();
-      // Ensure current configured admin email is reflected in the master record
-      if (serverManagedUsers.length > 0 && adminCreds.adminEmail) {
-        serverManagedUsers[0].email = adminCreds.adminEmail;
-      }
       res.json(serverManagedUsers);
     } catch (error: any) {
       console.error("[API Error] /api/admin/users:", error);
@@ -1107,17 +869,21 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
     }
   });
 
-  // Admin update user status (activate / deactivate)
+  // Admin update user status (activate / deactivate) & dispatch email notification
   app.post("/api/admin/user-status", async (req: Request, res: Response) => {
     try {
       const body = req.body && typeof req.body === "object" ? req.body : {};
-      const { targetUid, newStatus, reason, adminEmail } = body;
+      const { targetUid, targetEmail, targetName, newStatus, reason, adminEmail } = body;
 
       if (!targetUid || !newStatus) {
         res.status(400).json({ error: "Target UID and newStatus are required." });
         return;
       }
 
+      const adminCreds = await getAdminCredentials();
+      const adminContactEmail = adminCreds.adminEmail || adminEmail || "";
+
+      let userRecord = null;
       const userIndex = serverManagedUsers.findIndex((u) => u.uid === targetUid);
       if (userIndex >= 0) {
         serverManagedUsers[userIndex] = {
@@ -1127,12 +893,381 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
           deactivatedBy: newStatus === "deactivated" ? (adminEmail || "admin") : undefined,
           deactivationReason: newStatus === "deactivated" ? (reason || "Deactivated by administrator") : undefined,
         };
+        userRecord = serverManagedUsers[userIndex];
       }
 
-      res.json({ success: true, user: serverManagedUsers[userIndex] || null });
+      const recipientEmail = targetEmail || userRecord?.email;
+      const recipientName = targetName || userRecord?.displayName || recipientEmail?.split("@")[0] || "Journal Writer";
+
+      // Dispatch automated email notification to user regarding their status update
+      if (recipientEmail && recipientEmail.includes("@") && !recipientEmail.endsWith("@example.com")) {
+        const emailData = generateAccountStatusEmail({
+          userName: recipientName,
+          userEmail: recipientEmail,
+          status: newStatus as "active" | "deactivated",
+          reason: reason || userRecord?.deactivationReason,
+          adminContactEmail,
+        });
+
+        // Fire-and-forget email dispatch so response remains instantaneous
+        sendSystemEmail({
+          to: recipientEmail,
+          subject: emailData.subject,
+          html: emailData.html,
+          text: emailData.text,
+        }).catch((e) => console.warn("[Status Email Notice]:", e.message));
+      } else {
+        console.log(`[Status Email Notice] Status updated for ${recipientEmail || targetUid} to ${newStatus}. Simulated email template generated.`);
+      }
+
+      res.json({ success: true, user: userRecord || null });
     } catch (error: any) {
       console.error("[API Error] /api/admin/user-status:", error);
       res.status(500).json({ error: "Failed to update user status." });
+    }
+  });
+
+  // Deactivation appeals storage on server
+  interface ServerAppealReply {
+    id: string;
+    senderEmail: string;
+    senderName: string;
+    message: string;
+    sentAt: number;
+    emailDispatched?: boolean;
+  }
+
+  interface ServerAppeal {
+    id: string;
+    userId: string;
+    userEmail: string;
+    userName: string;
+    subject: string;
+    message: string;
+    deactivationReason?: string;
+    status: "pending" | "reviewed" | "approved" | "rejected";
+    createdAt: number;
+    updatedAt?: number;
+    reviewedBy?: string;
+    reviewedAt?: number;
+    adminNotes?: string;
+    replies?: ServerAppealReply[];
+  }
+
+  const serverAppeals: ServerAppeal[] = [];
+
+  // User Contact Administrator for Reactivation Support & Appeal Storage
+  app.post("/api/support/contact-admin", async (req: Request, res: Response) => {
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const { userEmail, userName, userId, subject, message, deactivationReason, appealId } = body;
+
+      if (!userEmail || !message) {
+        res.status(400).json({ error: "User email and message content are required." });
+        return;
+      }
+
+      const id = appealId || `appeal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const appealRecord: ServerAppeal = {
+        id,
+        userId: userId || "anonymous",
+        userEmail,
+        userName: userName || userEmail.split("@")[0] || "Journal Writer",
+        subject: subject || "Request for Account Reactivation",
+        message: message.trim(),
+        deactivationReason: deactivationReason || "Administrative hold",
+        status: "pending",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      // Add or update existing pending appeal from same user
+      const existingIdx = serverAppeals.findIndex((a) => a.userId === userId && a.status === "pending");
+      if (existingIdx >= 0) {
+        serverAppeals[existingIdx] = {
+          ...serverAppeals[existingIdx],
+          ...appealRecord,
+          id: serverAppeals[existingIdx].id,
+        };
+      } else {
+        serverAppeals.unshift(appealRecord);
+      }
+
+      const adminCreds = await getAdminCredentials();
+      const adminEmail = adminCreds.adminEmail || "";
+
+      const appealEmailData = generateReactivationAppealEmail({
+        userName: userName || userEmail,
+        userEmail,
+        userId,
+        subject,
+        message,
+        deactivationReason,
+      });
+
+      if (adminEmail) {
+        await sendSystemEmail({
+          to: adminEmail,
+          subject: appealEmailData.subject,
+          html: appealEmailData.html,
+          text: appealEmailData.text,
+        }).catch((e) => console.warn("[Appeal Email Notice]:", e.message));
+      }
+
+      res.json({
+        success: true,
+        recipient: adminEmail,
+        appeal: appealRecord,
+        message: "Your appeal has been recorded and dispatched to the administrator.",
+      });
+    } catch (error: any) {
+      console.error("[API Error] /api/support/contact-admin:", error);
+      res.status(500).json({ error: "Failed to send message to the administrator." });
+    }
+  });
+
+  // User sends a follow-up reply in an existing appeal conversation
+  app.post("/api/support/appeal-reply", async (req: Request, res: Response) => {
+    try {
+      const { appealId, reply, userEmail, userName, subject } = req.body || {};
+      if (!appealId || !reply || !reply.message) {
+        res.status(400).json({ error: "appealId and reply message are required." });
+        return;
+      }
+
+      const appealIndex = serverAppeals.findIndex((a) => a.id === appealId);
+      if (appealIndex >= 0) {
+        if (!serverAppeals[appealIndex].replies) {
+          serverAppeals[appealIndex].replies = [];
+        }
+        serverAppeals[appealIndex].replies.push(reply);
+        serverAppeals[appealIndex].updatedAt = Date.now();
+      }
+
+      // Notify administrator of user's follow-up message
+      const adminCreds = await getAdminCredentials();
+      const adminEmail = adminCreds.adminEmail || "";
+
+      const senderName = userName || userEmail?.split("@")[0] || "User";
+      if (adminEmail) {
+        sendSystemEmail({
+          to: adminEmail,
+          subject: `[Appeal Reply] ${senderName}: ${subject || "Account Reactivation Follow-up"}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #1e293b; max-width: 600px;">
+              <h2 style="color: #4f46e5; margin-bottom: 12px;">New User Reply on Appeal #${appealId}</h2>
+              <p style="font-size: 14px; margin-bottom: 16px;"><strong>${senderName}</strong> (<a href="mailto:${userEmail}">${userEmail}</a>) has sent a new follow-up message regarding their account deactivation appeal:</p>
+              <div style="background: #f8fafc; border-left: 4px solid #4f46e5; padding: 16px; border-radius: 6px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; margin-bottom: 20px;">
+${reply.message}
+              </div>
+              <p style="font-size: 12px; color: #64748b;">You can reply to the user directly from the Admin Portal or review the full conversation history.</p>
+            </div>
+          `,
+          text: `New User Reply on Appeal #${appealId} from ${senderName} (${userEmail}):\n\n${reply.message}`,
+        }).catch((e) => console.warn("[Admin Reply Alert Notice]:", e.message));
+      }
+
+      res.json({ success: true, reply });
+    } catch (error: any) {
+      console.error("[API Error] /api/support/appeal-reply:", error);
+      res.status(500).json({ error: "Failed to record user reply." });
+    }
+  });
+
+  // Admin list all reactivation appeals
+  app.get("/api/admin/appeals", async (_req: Request, res: Response) => {
+    try {
+      res.json(serverAppeals);
+    } catch (error: any) {
+      console.error("[API Error] /api/admin/appeals:", error);
+      res.status(500).json({ error: "Failed to retrieve user appeals." });
+    }
+  });
+
+  // Admin update appeal status (approve / reject / review)
+  app.post("/api/admin/appeals/:id/status", async (req: Request, res: Response) => {
+    try {
+      const appealId = req.params.id;
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const { status, adminNotes, adminEmail, reactivateUser } = body;
+
+      if (!status) {
+        res.status(400).json({ error: "Status is required." });
+        return;
+      }
+
+      const appealIndex = serverAppeals.findIndex((a) => a.id === appealId);
+      let updatedAppeal: ServerAppeal | null = null;
+
+      if (appealIndex >= 0) {
+        serverAppeals[appealIndex] = {
+          ...serverAppeals[appealIndex],
+          status,
+          adminNotes: adminNotes ?? serverAppeals[appealIndex].adminNotes,
+          reviewedBy: adminEmail || "Administrator",
+          reviewedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        updatedAppeal = serverAppeals[appealIndex];
+      }
+
+      // If approved or reactivateUser requested, update user status in server managed users
+      const targetUserId = body.userId || updatedAppeal?.userId;
+      const targetUserEmail = body.userEmail || updatedAppeal?.userEmail;
+
+      if ((status === "approved" || reactivateUser) && targetUserId) {
+        const userIndex = serverManagedUsers.findIndex((u) => u.uid === targetUserId || u.email === targetUserEmail);
+        if (userIndex >= 0) {
+          serverManagedUsers[userIndex] = {
+            ...serverManagedUsers[userIndex],
+            status: "active",
+            deactivatedAt: undefined,
+            deactivatedBy: undefined,
+            deactivationReason: undefined,
+          };
+        }
+
+        // Notify user of reactivation
+        if (targetUserEmail && targetUserEmail.includes("@")) {
+          const emailData = generateAccountStatusEmail({
+            userName: updatedAppeal?.userName || targetUserEmail.split("@")[0],
+            userEmail: targetUserEmail,
+            status: "active",
+            reason: adminNotes || "Appeal reviewed and approved by system administrator.",
+            adminContactEmail: adminEmail || "",
+          });
+
+          sendSystemEmail({
+            to: targetUserEmail,
+            subject: emailData.subject,
+            html: emailData.html,
+            text: emailData.text,
+          }).catch((e) => console.warn("[Status Email Notice]:", e.message));
+        }
+      }
+
+      res.json({
+        success: true,
+        appeal: updatedAppeal,
+      });
+    } catch (error: any) {
+      console.error("[API Error] /api/admin/appeals/:id/status:", error);
+      res.status(500).json({ error: "Failed to update appeal status." });
+    }
+  });
+
+  // Admin Reply to Appeal & Dispatch Email directly to User
+  app.post("/api/admin/appeals/:id/reply", async (req: Request, res: Response) => {
+    try {
+      const appealId = req.params.id;
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const { replyMessage, adminEmail, adminName, userEmail, userName, appealSubject, originalAppealMessage } = body;
+
+      if (!replyMessage || typeof replyMessage !== "string" || !replyMessage.trim()) {
+        res.status(400).json({ error: "Reply message text is required." });
+        return;
+      }
+
+      const adminCreds = await getAdminCredentials();
+      const senderAdminEmail = adminEmail || adminCreds.adminEmail || "";
+      const senderAdminName = adminName || "System Administration";
+
+      // Look up existing appeal or initialize record
+      let appealIndex = serverAppeals.findIndex((a) => a.id === appealId);
+      if (appealIndex < 0) {
+        const targetEmail = userEmail || "";
+        const newRecord: ServerAppeal = {
+          id: appealId,
+          userId: body.userId || "unknown",
+          userEmail: targetEmail,
+          userName: userName || targetEmail.split("@")[0] || "User",
+          subject: appealSubject || "Account Reactivation Request",
+          message: originalAppealMessage || "Appeal inquiry",
+          status: "reviewed",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          reviewedBy: senderAdminEmail,
+          reviewedAt: Date.now(),
+          replies: [],
+        };
+        serverAppeals.unshift(newRecord);
+        appealIndex = 0;
+      }
+
+      const targetAppeal = serverAppeals[appealIndex];
+      const targetUserEmail = userEmail || targetAppeal.userEmail;
+      const targetUserName = userName || targetAppeal.userName;
+      const targetSubject = appealSubject || targetAppeal.subject;
+      const targetOriginalMessage = originalAppealMessage || targetAppeal.message;
+
+      const replyRecord: ServerAppealReply = {
+        id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        senderEmail: senderAdminEmail,
+        senderName: senderAdminName,
+        message: replyMessage.trim(),
+        sentAt: Date.now(),
+        emailDispatched: false,
+      };
+
+      // Generate and dispatch email notification to user's registered email
+      if (targetUserEmail && targetUserEmail.includes("@")) {
+        const emailData = generateAdminAppealReplyEmail({
+          userName: targetUserName,
+          userEmail: targetUserEmail,
+          appealId,
+          appealSubject: targetSubject,
+          originalAppealMessage: targetOriginalMessage,
+          adminReply: replyMessage.trim(),
+          adminName: senderAdminName,
+          adminEmail: senderAdminEmail,
+        });
+
+        try {
+          const dispatch = await sendSystemEmail({
+            to: targetUserEmail,
+            subject: emailData.subject,
+            html: emailData.html,
+            text: emailData.text,
+          });
+          replyRecord.emailDispatched = dispatch.success;
+          console.log(`[Appeal Reply Email] Dispatched to ${targetUserEmail} for appeal ${appealId}. Success:`, dispatch.success);
+        } catch (e: any) {
+          console.warn("[Appeal Reply Email Notice]:", e.message);
+        }
+      }
+
+      if (!targetAppeal.replies) {
+        targetAppeal.replies = [];
+      }
+      targetAppeal.replies.push(replyRecord);
+      targetAppeal.updatedAt = Date.now();
+      if (targetAppeal.status === "pending") {
+        targetAppeal.status = "reviewed";
+      }
+
+      res.json({
+        success: true,
+        reply: replyRecord,
+        appeal: targetAppeal,
+      });
+    } catch (error: any) {
+      console.error("[API Error] /api/admin/appeals/:id/reply:", error);
+      res.status(500).json({ error: "Failed to dispatch reply to user." });
+    }
+  });
+
+  // Admin delete appeal
+  app.delete("/api/admin/appeals/:id", async (req: Request, res: Response) => {
+    try {
+      const appealId = req.params.id;
+      const index = serverAppeals.findIndex((a) => a.id === appealId);
+      if (index >= 0) {
+        serverAppeals.splice(index, 1);
+      }
+      res.json({ success: true, deletedId: appealId });
+    } catch (error: any) {
+      console.error("[API Error] DELETE /api/admin/appeals/:id:", error);
+      res.status(500).json({ error: "Failed to delete appeal." });
     }
   });
 
@@ -1148,9 +1283,9 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
       const filteredLogs = aiTelemetryLogs.filter((l) => l.timestamp >= cutoff);
       const totalAiRequests = aiTelemetryLogs.length;
       const totalAiTokens = aiTelemetryLogs.reduce((sum, l) => sum + l.totalTokens, 0);
-      const totalAiCostUsd = Math.round(aiTelemetryLogs.reduce((sum, l) => sum + l.costUsd, 0) * 10000) / 10000;
+      const totalAiCostUsd = Math.round(aiTelemetryLogs.reduce((sum, l) => sum + l.costUsd, 0) * 100000) / 100000;
 
-      // Group by date for Daily AI Usage & Daily Signups
+      // Group by date for Daily AI Usage & Daily Signups based strictly on genuine activity
       const dayMap: {
         [dateStr: string]: {
           timestamp: number;
@@ -1167,14 +1302,11 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
 
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-      // Seed all dates in the requested range so continuous dates appear in charts
+      // Initialize all dates in the requested timeframe with zero counts (no random numbers)
       for (let i = daysParam - 1; i >= 0; i--) {
         const d = new Date(now - i * 86400000);
         const dateStr = d.toISOString().split("T")[0];
         const dateFormatted = `${monthNames[d.getMonth()]} ${d.getDate()}`;
-        
-        // Baseline realistic signups trend with slight organic variance
-        const baseSignups = Math.max(1, Math.round(3 + Math.sin(i * 0.8) * 2 + (daysParam - i) * 0.3));
         
         dayMap[dateStr] = {
           timestamp: d.getTime(),
@@ -1185,11 +1317,21 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
           totalTokens: 0,
           costUsd: 0,
           totalLatency: 0,
-          signups: baseSignups,
+          signups: 0,
         };
       }
 
-      // Populate from filtered logs
+      // Populate signups from genuine server managed users if any
+      serverManagedUsers.forEach((u) => {
+        if (u.createdAt >= cutoff) {
+          const dStr = new Date(u.createdAt).toISOString().split("T")[0];
+          if (dayMap[dStr]) {
+            dayMap[dStr].signups += 1;
+          }
+        }
+      });
+
+      // Populate from genuine filtered runtime logs
       filteredLogs.forEach((log) => {
         const dStr = log.dateStr;
         if (!dayMap[dStr]) {
@@ -1203,7 +1345,7 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
             totalTokens: 0,
             costUsd: 0,
             totalLatency: 0,
-            signups: 2,
+            signups: 0,
           };
         }
         dayMap[dStr].requests += 1;
@@ -1215,7 +1357,7 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
       });
 
       const sortedDates = Object.keys(dayMap).sort();
-      let runningCumulative = 42; // baseline historical registered users
+      let runningCumulative = 0;
 
       const dailySignups = sortedDates.map((dateStr) => {
         const item = dayMap[dateStr];
@@ -1283,14 +1425,18 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
       }));
 
       const todayStr = new Date().toISOString().split("T")[0];
-      const todaySignups = dayMap[todayStr]?.signups || 4;
+      const todaySignups = dayMap[todayStr]?.signups || 0;
       const weekSignups = dailySignups.slice(-7).reduce((sum, d) => sum + d.count, 0);
 
+      const genuineActiveUsers = serverManagedUsers.filter((u) => u.status === "active").length;
+      const genuineDeactivatedUsers = serverManagedUsers.filter((u) => u.status === "deactivated").length;
+      const genuineAdminUsers = serverManagedUsers.filter((u) => u.role === "admin").length;
+
       res.json({
-        totalUsers: runningCumulative,
-        activeUsers: Math.max(1, Math.round(runningCumulative * 0.94)),
-        deactivatedUsers: Math.max(0, Math.round(runningCumulative * 0.06)),
-        adminUsers: 3,
+        totalUsers: serverManagedUsers.length,
+        activeUsers: genuineActiveUsers,
+        deactivatedUsers: genuineDeactivatedUsers,
+        adminUsers: genuineAdminUsers,
         todaySignups,
         weekSignups,
         totalAiRequests,

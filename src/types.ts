@@ -204,3 +204,41 @@ export interface WeeklyDigestSettings {
   lastSentWeek?: string;
 }
 
+export type AppealStatus = 'pending' | 'reviewed' | 'approved' | 'rejected';
+
+export interface AppealReply {
+  id: string;
+  senderEmail: string;
+  senderName: string;
+  senderRole?: 'admin' | 'user';
+  message: string;
+  sentAt: number;
+  emailDispatched?: boolean;
+}
+
+export interface UserConversation {
+  id: string;
+  userId: string;
+  entryId: string;
+  title: string;
+  messages: JournalMessage[];
+  updatedAt: number;
+}
+
+export interface DeactivationAppeal {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  subject: string;
+  message: string;
+  deactivationReason?: string;
+  status: AppealStatus;
+  createdAt: number;
+  updatedAt?: number;
+  reviewedBy?: string;
+  reviewedAt?: number;
+  adminNotes?: string;
+  replies?: AppealReply[];
+}
+

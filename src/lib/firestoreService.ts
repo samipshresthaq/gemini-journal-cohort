@@ -97,6 +97,27 @@ export async function saveJournalEntry(userId: string, entry: JournalEntry): Pro
     });
 
     await setDoc(entryRef, sanitized, { merge: true });
+
+    // Also persist conversation thread in user conversations subcollection
+    if (entry.messages && entry.messages.length > 0) {
+      try {
+        const convRef = doc(db, "users", userId, "conversations", entry.id);
+        await setDoc(
+          convRef,
+          sanitizeForFirestore({
+            id: entry.id,
+            userId,
+            entryId: entry.id,
+            title: entry.title || "Reflection Conversation",
+            messages: entry.messages,
+            updatedAt: Date.now(),
+          }),
+          { merge: true }
+        );
+      } catch (convErr) {
+        console.warn("Notice: Non-blocking conversation mirror notice:", convErr);
+      }
+    }
   } catch (err) {
     console.warn("Notice: Firestore entry save fallback to local:", err);
     const entries = getGuestEntries(userId);
@@ -308,5 +329,35 @@ export async function logUserInteraction(
     );
   } catch (err) {
     console.warn("Could not record telemetry interaction:", err);
+  }
+}
+
+/**
+ * Save user conversation explicitly in Firestore
+ */
+export async function saveUserConversation(
+  userId: string,
+  conversationId: string,
+  messages: JournalMessage[],
+  metadata?: { title?: string; entryId?: string }
+): Promise<void> {
+  if (!userId || !conversationId) return;
+
+  try {
+    const convRef = doc(db, "users", userId, "conversations", conversationId);
+    await setDoc(
+      convRef,
+      sanitizeForFirestore({
+        id: conversationId,
+        userId,
+        entryId: metadata?.entryId || conversationId,
+        title: metadata?.title || "Reflection Conversation",
+        messages,
+        updatedAt: Date.now(),
+      }),
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("Could not save user conversation:", err);
   }
 }

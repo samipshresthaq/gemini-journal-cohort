@@ -228,6 +228,33 @@ const TEST_CASES: TestCase[] = [
     ],
     expected: "Admin can activate and deactivate users with safety guards, realtime state synchronization, and audit trail logging.",
   },
+  {
+    id: "TC-18",
+    category: "Deactivated User Experience",
+    title: "Deactivated User 'Contact Admin' Appeal Portal",
+    steps: [
+      "When a deactivated user signs in, observe the dedicated Account Suspended screen.",
+      "Verify the deactivation reason and suspension notice are clearly displayed.",
+      "Click 'Contact Admin' or 'Send Appeal to Administrator' to open the reactivation appeal form.",
+      "Type a subject and custom explanation message requesting reactivation review.",
+      "Click 'Send Message to Admin' or use 'Direct Mail' to launch a mail client addressed to the admin.",
+      "Verify that the appeal is successfully transmitted to the administrator's email with confirmation feedback.",
+    ],
+    expected: "Deactivated users are prevented from modifying entries and have a direct, functional appeal path to contact the administrator.",
+  },
+  {
+    id: "TC-19",
+    category: "Automated Email Notifications",
+    title: "Automated Status Change Email Notifications (Activation & Deactivation)",
+    steps: [
+      "As an administrator, go to '/admin/users' and deactivate an active user account with a reason.",
+      "Verify that the backend immediately dispatches an automated deactivation notification email to the user's registered email address with the reason and appeal link.",
+      "Now click 'Reactivate' on the deactivated user account.",
+      "Verify that the backend immediately dispatches an automated reactivation notification email confirming their account is active with a direct login link.",
+      "Inspect server logs to confirm both status notification emails were formatted and sent via the email transport engine.",
+    ],
+    expected: "Users receive responsive, beautifully styled HTML email notifications whenever their account status is activated or deactivated.",
+  },
 ];
 
 
