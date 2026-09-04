@@ -750,7 +750,7 @@ export const WeeklyDigestModal: React.FC<WeeklyDigestModalProps> = ({
           {/* TAB 4: Subscription & Delivery Preferences */}
           {activeTab === "settings" && (
             <div className="space-y-6">
-              <div className="p-5 rounded-2xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-5">
+              <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">

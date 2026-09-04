@@ -424,7 +424,7 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Type your message to the administrator..."
-                    className="w-full p-3 text-xs bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 resize-none font-sans"
+                    className="w-full p-3 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-sans"
                   />
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-[11px] text-slate-400">
@@ -513,7 +513,7 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
                   required
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full h-10 px-3.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
+                  className="w-full h-10 px-3.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium transition-all"
                 />
               </div>
 
@@ -528,7 +528,7 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Explain why your account should be reviewed or reactivated..."
-                  className="w-full p-3.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 resize-none font-sans leading-relaxed"
+                  className="w-full p-3.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none font-sans leading-relaxed transition-all"
                 />
               </div>
 

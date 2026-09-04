@@ -318,7 +318,7 @@ export const VoiceControlPanel: React.FC<VoiceControlPanelProps> = ({
           id="voice-commands-cheatsheet"
           className={`p-4 rounded-xl border space-y-2.5 text-xs transition-all ${
             isActive && !isGuest
-              ? "bg-slate-800/80 dark:bg-slate-900/80 border-slate-700/80 dark:border-slate-750 text-slate-300 dark:text-slate-300"
+              ? "bg-slate-800/80 dark:bg-slate-900/80 border-slate-700/80 dark:border-slate-700 text-slate-300 dark:text-slate-300"
               : "bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 shadow-xs"
           }`}
         >

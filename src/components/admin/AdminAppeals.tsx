@@ -443,7 +443,7 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
                 }`}
               >
                 {/* Top User & Status Bar */}
-                <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-850/40">
+                <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/60">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold text-sm flex items-center justify-center shadow-xs shrink-0">
                       {appeal.userName ? appeal.userName.charAt(0).toUpperCase() : appeal.userEmail.charAt(0).toUpperCase()}
@@ -667,7 +667,7 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
                           }))
                         }
                         placeholder="Explain why the appeal cannot be approved at this time (this will be recorded in the system)..."
-                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                        className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
                       />
 
                       <div className="flex items-center justify-end gap-2">

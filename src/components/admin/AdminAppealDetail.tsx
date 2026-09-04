@@ -392,7 +392,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
 
         {/* Account Status Indicator Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6">
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 text-xs">
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 text-xs">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
               Current Directory Status
             </span>
@@ -408,7 +408,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 text-xs">
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 text-xs">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
               Reviewer
             </span>
@@ -417,7 +417,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             </span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 text-xs">
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 text-xs">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
               Email Notifications
             </span>
@@ -469,7 +469,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
               </h4>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-200/70 dark:border-slate-800">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                 Verbatim Message Content:
               </div>
@@ -494,7 +494,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             </div>
 
             {(!appeal.replies || appeal.replies.length === 0) ? (
-              <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-850/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
                 <Mail className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                   No replies sent to this user yet.
@@ -512,8 +512,8 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                       key={reply.id}
                       className={`p-4 rounded-2xl border space-y-2 ${
                         isUser
-                          ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-900/40"
-                          : "bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40"
+                          ? "bg-amber-50/50 dark:bg-amber-950/30 border-amber-200/70 dark:border-amber-900/50"
+                          : "bg-indigo-50/40 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
@@ -602,7 +602,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                 value={replyInput}
                 onChange={(e) => setReplyInput(e.target.value)}
                 placeholder={`Write your response to ${appeal.userName || appeal.userEmail}... This will be sent directly to their email address.`}
-                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all"
               />
 
               <div className="flex items-center justify-between gap-3 pt-1">
@@ -694,7 +694,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
 
           {/* Admin Decision History Note Card */}
           {appeal.adminNotes && (
-            <div className="bg-indigo-50/50 dark:bg-indigo-950/20 rounded-3xl border border-indigo-200/70 dark:border-indigo-800/60 p-5 space-y-2">
+            <div className="bg-indigo-50/50 dark:bg-indigo-950/30 rounded-3xl border border-indigo-200/70 dark:border-indigo-800/70 p-5 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
                 <span>Recorded Decision Notes:</span>
                 {appeal.reviewedAt && (
@@ -744,7 +744,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="e.g. Account suspended for severe terms of service violations. Appeal declined."
-              className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:bg-white dark:focus:bg-slate-800"
             />
 
             <div className="flex items-center justify-end gap-2 pt-2">
