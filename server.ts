@@ -1232,6 +1232,35 @@ ${reply.message}
     }
   });
 
+  // Safe user endpoint: Retrieve user's appeal and entire conversation thread with admin
+  app.get("/api/support/my-appeal", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.query.userId as string) || "";
+      const userEmail = ((req.query.userEmail as string) || "").toLowerCase().trim();
+
+      if (!userId && !userEmail) {
+        res.status(400).json({ error: "userId or userEmail required." });
+        return;
+      }
+
+      const matched = serverAppeals
+        .filter((a) => {
+          const idMatch = Boolean(userId && a.userId === userId);
+          const emailMatch = Boolean(userEmail && a.userEmail?.toLowerCase().trim() === userEmail);
+          return idMatch || emailMatch;
+        })
+        .sort((a, b) => b.createdAt - a.createdAt);
+
+      res.json({
+        appeal: matched[0] || null,
+        allAppeals: matched,
+      });
+    } catch (error: any) {
+      console.error("[API Error] /api/support/my-appeal:", error);
+      res.status(500).json({ error: "Failed to retrieve user appeal." });
+    }
+  });
+
   // Admin list all reactivation appeals
   app.get("/api/admin/appeals", async (_req: Request, res: Response) => {
     try {

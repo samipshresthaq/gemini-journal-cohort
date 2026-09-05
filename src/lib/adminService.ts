@@ -1345,92 +1345,155 @@ export async function fetchPaginatedAppeals(options?: {
 /**
  * Fetch the latest appeal submitted by a specific user (if any)
  */
-export async function fetchUserAppeal(userId: string): Promise<DeactivationAppeal | null> {
+export async function fetchUserAppeal(userId: string, userEmail?: string): Promise<DeactivationAppeal | null> {
+  // 1. Try Firestore with where("userId", "==", userId) to comply with Firestore Security Rules
   try {
     const appealsCol = collection(db, "appeals");
-    const snap = await getDocs(appealsCol);
-    const userAppeals = snap.docs
-      .map((d) => ({ ...d.data(), id: d.id } as DeactivationAppeal))
-      .filter((a) => a.userId === userId)
-      .sort((a, b) => b.createdAt - a.createdAt);
+    if (userId) {
+      const q = query(appealsCol, where("userId", "==", userId));
+      const snap = await getDocs(q);
+      const userAppeals = snap.docs
+        .map((d) => ({ ...d.data(), id: d.id } as DeactivationAppeal))
+        .sort((a, b) => b.createdAt - a.createdAt);
 
-    if (userAppeals.length > 0) {
-      return userAppeals[0];
+      if (userAppeals.length > 0) {
+        return userAppeals[0];
+      }
+    }
+
+    if (userEmail) {
+      const qEmail = query(appealsCol, where("userEmail", "==", userEmail));
+      const snapEmail = await getDocs(qEmail);
+      const emailAppeals = snapEmail.docs
+        .map((d) => ({ ...d.data(), id: d.id } as DeactivationAppeal))
+        .sort((a, b) => b.createdAt - a.createdAt);
+      if (emailAppeals.length > 0) {
+        return emailAppeals[0];
+      }
     }
   } catch (err) {
-    console.warn("[Firestore] Could not query user appeal:", err);
+    console.warn("[Firestore] Could not query user appeal with filter:", err);
   }
 
+  // 2. Fetch from dedicated backend endpoint /api/support/my-appeal
+  try {
+    const params = new URLSearchParams();
+    if (userId) params.set("userId", userId);
+    if (userEmail) params.set("userEmail", userEmail);
+    const res = await fetch(`/api/support/my-appeal?${params.toString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.appeal) {
+        return data.appeal;
+      }
+    }
+  } catch (netErr) {
+    console.warn("[Support API] Could not fetch my-appeal:", netErr);
+  }
+
+  // 3. Fallback to /api/admin/appeals
   try {
     const serverAppeals = await fetchAppealsFromBackend();
-    const userAppeals = serverAppeals
-      .filter((a) => a.userId === userId)
+    const matched = serverAppeals
+      .filter(
+        (a) =>
+          (userId && a.userId === userId) ||
+          (userEmail && a.userEmail?.toLowerCase().trim() === userEmail.toLowerCase().trim())
+      )
       .sort((a, b) => b.createdAt - a.createdAt);
-    return userAppeals[0] || null;
+    return matched[0] || null;
   } catch {
     return null;
   }
 }
 
 /**
- * Real-time subscription to a user's appeal in Firestore
+ * Real-time subscription to a user's appeal in Firestore + background polling fallback
+ * Ensures that admin replies are immediately received by deactivated users.
  */
 export function subscribeToUserAppeal(
   userId: string,
-  onUpdate: (appeal: DeactivationAppeal | null) => void,
-  onError?: (err: any) => void
+  userEmailOrOnUpdate: string | ((appeal: DeactivationAppeal | null) => void),
+  onUpdateOrOnError?: ((appeal: DeactivationAppeal | null) => void) | ((err: any) => void),
+  possibleOnError?: (err: any) => void
 ): Unsubscribe {
-  if (!userId) {
+  let userEmail: string | undefined;
+  let onUpdate: (appeal: DeactivationAppeal | null) => void;
+  let onError: ((err: any) => void) | undefined;
+
+  if (typeof userEmailOrOnUpdate === "string") {
+    userEmail = userEmailOrOnUpdate;
+    onUpdate = onUpdateOrOnError as (appeal: DeactivationAppeal | null) => void;
+    onError = possibleOnError;
+  } else {
+    onUpdate = userEmailOrOnUpdate;
+    onError = onUpdateOrOnError as ((err: any) => void) | undefined;
+  }
+
+  if (!userId && !userEmail) {
     onUpdate(null);
     return () => {};
   }
 
-  // If not authenticated in Firebase Auth, fall back to polling backend
-  if (!auth.currentUser) {
-    fetchAppealsFromBackend()
-      .then((serverAppeals) => {
-        const matched = serverAppeals
-          .filter((a) => a.userId === userId)
-          .sort((a, b) => b.createdAt - a.createdAt);
-        onUpdate(matched[0] || null);
-      })
-      .catch(() => onUpdate(null));
-    return () => {};
+  let isUnsubscribed = false;
+  let unsubscribeFirestore = () => {};
+
+  // 1. Initial immediate fetch from backend & Firestore
+  const fetchAndUpdate = async () => {
+    try {
+      const app = await fetchUserAppeal(userId, userEmail);
+      if (!isUnsubscribed && app) {
+        onUpdate(app);
+      }
+    } catch {}
+  };
+
+  fetchAndUpdate();
+
+  // 2. Attach Firestore onSnapshot with where("userId", "==", userId)
+  if (userId) {
+    try {
+      const appealsCol = collection(db, "appeals");
+      const q = query(appealsCol, where("userId", "==", userId));
+      unsubscribeFirestore = onSnapshot(
+        q,
+        (snapshot) => {
+          const userAppeals: DeactivationAppeal[] = [];
+          snapshot.forEach((d) => {
+            userAppeals.push({ ...d.data(), id: d.id } as DeactivationAppeal);
+          });
+          userAppeals.sort((a, b) => b.createdAt - a.createdAt);
+          if (!isUnsubscribed) {
+            if (userAppeals.length > 0) {
+              onUpdate(userAppeals[0]);
+            } else {
+              fetchAndUpdate();
+            }
+          }
+        },
+        (err) => {
+          console.warn("[Firestore] User appeal stream notice:", err?.message);
+          if (onError) onError(err);
+          fetchAndUpdate();
+        }
+      );
+    } catch (err) {
+      console.warn("[Firestore] Could not attach user appeal snapshot:", err);
+    }
   }
 
-  try {
-    const appealsCol = collection(db, "appeals");
-    const q = query(appealsCol, orderBy("createdAt", "desc"));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const userAppeals: DeactivationAppeal[] = [];
-        snapshot.forEach((d) => {
-          const data = d.data();
-          if (data.userId === userId) {
-            userAppeals.push({ ...data, id: d.id } as DeactivationAppeal);
-          }
-        });
-        userAppeals.sort((a, b) => b.createdAt - a.createdAt);
-        onUpdate(userAppeals[0] || null);
-      },
-      (err) => {
-        console.warn("[Firestore] User appeal stream notice:", err?.message);
-        if (onError) onError(err);
-        fetchAppealsFromBackend()
-          .then((serverAppeals) => {
-            const matched = serverAppeals
-              .filter((a) => a.userId === userId)
-              .sort((a, b) => b.createdAt - a.createdAt);
-            onUpdate(matched[0] || null);
-          })
-          .catch(() => {});
-      }
-    );
-  } catch (err) {
-    console.warn("[Firestore] Could not attach user appeal snapshot:", err);
-    return () => {};
-  }
+  // 3. Heartbeat polling every 3.5s so admin replies appear in real-time
+  const pollInterval = setInterval(() => {
+    if (!isUnsubscribed) {
+      fetchAndUpdate();
+    }
+  }, 3500);
+
+  return () => {
+    isUnsubscribed = true;
+    clearInterval(pollInterval);
+    unsubscribeFirestore();
+  };
 }
 
 /**

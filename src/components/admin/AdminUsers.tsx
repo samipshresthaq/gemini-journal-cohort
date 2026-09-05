@@ -26,6 +26,7 @@ import {
   BellOff,
   Loader2,
   Sparkles,
+  MessageSquare,
 } from "lucide-react";
 import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus, DeactivationAppeal } from "../../types";
 import {
@@ -40,13 +41,14 @@ import {
   triggerUserSeedingApi,
 } from "../../lib/adminService";
 import { AdminPagination } from "./AdminPagination";
+import { AdminUserConversationModal } from "./AdminUserConversationModal";
 
 interface AdminUsersProps {
   currentUser: AuthUser;
   users: UserProfile[];
   isLoading: boolean;
   onRefresh?: () => void;
-  onNavigateToAppeals?: () => void;
+  onNavigateToAppeals?: (appealId?: string) => void;
 }
 
 export const AdminUsers: React.FC<AdminUsersProps> = ({
@@ -62,6 +64,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "deactivated" | "admin" | "user">("all");
   const [activeSubTab, setActiveSubTab] = useState<"directory" | "audit">("directory");
   const [appeals, setAppeals] = useState<DeactivationAppeal[]>([]);
+  const [inspectingConversationUser, setInspectingConversationUser] = useState<UserProfile | null>(null);
 
   // Deactivation confirmation modal state
   const [deactivatingUser, setDeactivatingUser] = useState<UserProfile | null>(null);
@@ -473,7 +476,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
             {onNavigateToAppeals && (
               <button
                 id="subtab-admin-appeals"
-                onClick={onNavigateToAppeals}
+                onClick={() => onNavigateToAppeals()}
                 className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               >
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
@@ -722,7 +725,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                               {!isActive && userAppeal && (
                                 <button
                                   type="button"
-                                  onClick={() => onNavigateToAppeals?.()}
+                                  onClick={() => onNavigateToAppeals?.(userAppeal.id)}
                                   title={`Appeal: "${userAppeal.subject}". Click to view appeals.`}
                                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
                                     userAppeal.status === "pending"
@@ -783,11 +786,25 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
 
                           {/* Access Actions Column */}
                           <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {/* Direct conversation history button for deactivated users */}
+                              {!isActive && (
+                                <button
+                                  id={`btn-view-history-${user.uid}`}
+                                  type="button"
+                                  onClick={() => setInspectingConversationUser(user)}
+                                  title="Directly view conversation history for this deactivated user"
+                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                                  <span>Conversation History</span>
+                                </button>
+                              )}
+
                               {!isActive && userAppeal && userAppeal.status === "pending" && onNavigateToAppeals && (
                                 <button
                                   type="button"
-                                  onClick={onNavigateToAppeals}
+                                  onClick={() => onNavigateToAppeals(userAppeal.id)}
                                   title="Review user appeal"
                                   className="px-2 py-1 rounded-lg text-[11px] font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs flex items-center gap-1"
                                 >
@@ -1142,6 +1159,24 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
             </form>
           </div>
         </div>
+      )}
+      {/* Direct conversation history inspection modal for deactivated user */}
+      {inspectingConversationUser && (
+        <AdminUserConversationModal
+          user={inspectingConversationUser}
+          appeal={
+            appeals.find(
+              (a) =>
+                a.userId === inspectingConversationUser.uid ||
+                a.userEmail.toLowerCase() === inspectingConversationUser.email.toLowerCase()
+            ) || null
+          }
+          onClose={() => setInspectingConversationUser(null)}
+          onNavigateToAppeals={(appealId) => {
+            setInspectingConversationUser(null);
+            onNavigateToAppeals?.(appealId);
+          }}
+        />
       )}
     </div>
   );

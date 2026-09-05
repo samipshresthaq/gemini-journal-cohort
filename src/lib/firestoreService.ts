@@ -307,6 +307,46 @@ export function subscribeToUserEntries(
 }
 
 /**
+ * Direct fetch of user journal entries (for history inspection by user or admin)
+ */
+export async function fetchUserEntriesDirectly(userId: string): Promise<JournalEntry[]> {
+  if (!userId) return [];
+
+  const localEntries = getStoredUserEntries(userId);
+
+  try {
+    const entriesRef = collection(db, "users", userId, "entries");
+    const q = query(entriesRef, orderBy("updatedAt", "desc"), limit(50));
+    const snap = await getDocs(q);
+
+    if (!snap.empty) {
+      const remoteEntries: JournalEntry[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        remoteEntries.push({
+          id: docSnap.id,
+          userId: data.userId || userId,
+          title: data.title || "Untitled Reflection",
+          createdAt: data.createdAt || Date.now(),
+          updatedAt: data.updatedAt || Date.now(),
+          mood: data.mood,
+          topic: data.topic,
+          messages: data.messages || [],
+          summary: data.summary,
+          isFavorite: data.isFavorite || false,
+          tags: data.tags || [],
+        });
+      });
+      return remoteEntries;
+    }
+  } catch (err: any) {
+    console.warn("[Firestore] Direct user entries fetch notice:", err?.message || err);
+  }
+
+  return localEntries;
+}
+
+/**
  * Delete a specific journal entry
  */
 export async function deleteJournalEntry(userId: string, entryId: string): Promise<void> {

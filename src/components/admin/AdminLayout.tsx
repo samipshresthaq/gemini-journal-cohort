@@ -51,6 +51,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isUsersLoading, setIsUsersLoading] = useState(true);
   const [appeals, setAppeals] = useState<DeactivationAppeal[]>([]);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [selectedAppealId, setSelectedAppealId] = useState<string | undefined>(undefined);
 
   // Theme management with graceful fallback
   const [localTheme, setLocalTheme] = useState<"light" | "dark">(() => {
@@ -403,7 +404,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             onClick={onBackToJournal}
             className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors"
           >
-            Exit
+            Back
           </button>
         </div>
       </div>
@@ -480,7 +481,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               currentUser={currentUser}
               users={users}
               isLoading={isUsersLoading}
-              onNavigateToAppeals={() => onRouteChange("appeals")}
+              onNavigateToAppeals={(appealId) => {
+                if (appealId) setSelectedAppealId(appealId);
+                onRouteChange("appeals");
+              }}
             />
           )}
 
@@ -489,6 +493,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               currentUser={currentUser}
               liveUsers={users}
               onNavigateToUsers={() => onRouteChange("users")}
+              initialSelectedAppealId={selectedAppealId}
+              onSelectedAppealChange={(id) => setSelectedAppealId(id || undefined)}
             />
           )}
         </main>
