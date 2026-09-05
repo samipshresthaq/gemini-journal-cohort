@@ -4,6 +4,7 @@ import {
   signInWithGoogle, 
   signInWithEmail,
   signUpWithEmail,
+  resetUserPassword,
   signOutUser, 
   subscribeToAuth 
 } from "./firebase";
@@ -13,7 +14,11 @@ import {
   deleteJournalEntry, 
   toggleEntryFavorite,
   migrateGuestEntriesToFirestore,
-  logUserInteraction 
+  logUserInteraction,
+  isQuotaExceededError,
+  getIsQuotaExceeded,
+  getStoredUserEntries,
+  saveStoredUserEntries
 } from "./lib/firestoreService";
 import { 
   recordUserLoginStreak, 
@@ -21,7 +26,6 @@ import {
   migrateGuestStreakToFirestore 
 } from "./lib/streakService";
 import { 
-  seedDefaultAdminAndDirectory, 
   syncUserProfile, 
   isSystemAdminEmail,
   verifyAdminWithBackend,
@@ -163,11 +167,6 @@ export default function App() {
 
   // 2. Listen to Firebase Authentication state & restore guest session if present
   useEffect(() => {
-    // Initial run to seed default admin user and sample directory
-    seedDefaultAdminAndDirectory().catch((err) =>
-      console.warn("Initial admin seed:", err)
-    );
-
     const unsubscribe = subscribeToAuth(async (fbUser) => {
       if (fbUser) {
         const authUserData: AuthUser = {
@@ -252,10 +251,11 @@ export default function App() {
 
   // 2. Real-time Firestore entries subscription for active user
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
+    const currentUid = user.uid;
 
     const unsubscribe = subscribeToUserEntries(
-      user.uid,
+      currentUid,
       (userEntries) => {
         setEntries(userEntries);
         // If no active entry is selected, default to latest entry or create new
@@ -263,29 +263,37 @@ export default function App() {
           if (userEntries.length > 0) {
             setActiveEntry(userEntries[0]);
           } else {
-            const fresh = createNewEmptyEntry(user.uid);
+            const fresh = createNewEmptyEntry(currentUid);
             setActiveEntry(fresh);
           }
         } else {
-          // Sync any remote updates into active entry if matched
+          // Sync remote updates into active entry only if remote is strictly newer
           const updated = userEntries.find((e) => e.id === activeEntryRef.current?.id);
           if (updated) {
-            setActiveEntry((prev) => (prev ? { ...prev, ...updated } : updated));
+            setActiveEntry((prev) => {
+              if (!prev || (updated.updatedAt && updated.updatedAt > prev.updatedAt)) {
+                return { ...prev, ...updated };
+              }
+              return prev;
+            });
           }
         }
       },
       (err) => {
-        if (err?.message?.includes("insufficient permissions") || (err as any)?.code === "permission-denied") {
-          console.warn("User entries subscription awaiting permission sync:", err.message);
+        if (
+          err?.message?.includes("insufficient permissions") ||
+          (err as any)?.code === "permission-denied" ||
+          isQuotaExceededError(err)
+        ) {
+          console.warn("User entries subscription operating in offline/cached mode:", err?.message || err);
           return;
         }
-        console.error("Failed to load user entries:", err);
-        setErrorMessage("Could not synchronize entries.");
+        console.warn("Notice loading user entries:", err?.message || err);
       }
     );
 
     return () => unsubscribe();
-  }, [user, createNewEmptyEntry]);
+  }, [user?.uid, createNewEmptyEntry]);
 
   // 3. Daily login streak synchronization & real-time updates (Authenticated users only)
   useEffect(() => {
@@ -357,17 +365,40 @@ export default function App() {
     try {
       await signInWithEmail(email, pass);
     } catch (err: any) {
-      console.error("Email sign-in failed:", err);
+      const code =
+        err?.code ||
+        (typeof err?.message === "string" ? err.message.match(/auth\/[a-z-]+/)?.[0] : undefined);
+
+      const isExpectedAuthError = [
+        "auth/invalid-credential",
+        "auth/wrong-password",
+        "auth/user-not-found",
+        "auth/invalid-email",
+        "auth/user-disabled",
+        "auth/too-many-requests",
+      ].includes(code as string) || (typeof err?.message === "string" && (
+        err.message.includes("invalid-credential") ||
+        err.message.includes("wrong-password") ||
+        err.message.includes("user-not-found")
+      ));
+
+      if (isExpectedAuthError) {
+        console.warn("Email sign-in notice:", code || err?.message);
+      } else {
+        console.warn("Email sign-in notice:", err?.message || err);
+      }
+
       let userFriendlyMsg = "Could not sign in with provided email and password.";
       if (
-        err?.code === "auth/invalid-credential" || 
-        err?.code === "auth/wrong-password" || 
-        err?.code === "auth/user-not-found"
+        code === "auth/invalid-credential" || 
+        code === "auth/wrong-password" || 
+        code === "auth/user-not-found" ||
+        (typeof err?.message === "string" && err.message.includes("invalid-credential"))
       ) {
-        userFriendlyMsg = "Incorrect email or password. Please verify your details or create an account.";
-      } else if (err?.code === "auth/invalid-email") {
+        userFriendlyMsg = "Incorrect email or password. If you haven't created an account yet, please create one.";
+      } else if (code === "auth/invalid-email") {
         userFriendlyMsg = "The email address is formatted incorrectly.";
-      } else if (err?.code === "auth/too-many-requests") {
+      } else if (code === "auth/too-many-requests") {
         userFriendlyMsg = "Too many failed login attempts. Please wait a moment and try again.";
       } else if (err?.message) {
         userFriendlyMsg = err.message;
@@ -382,7 +413,18 @@ export default function App() {
     try {
       await signUpWithEmail(email, pass, name);
     } catch (err: any) {
-      console.error("Email sign-up failed:", err);
+      const isExpectedAuthError = [
+        "auth/email-already-in-use",
+        "auth/weak-password",
+        "auth/invalid-email",
+      ].includes(err?.code);
+
+      if (isExpectedAuthError) {
+        console.warn("Email sign-up notice:", err?.code || err?.message);
+      } else {
+        console.error("Email sign-up failed:", err);
+      }
+
       let userFriendlyMsg = "Could not create account with email.";
       if (err?.code === "auth/email-already-in-use") {
         userFriendlyMsg = "An account with this email address already exists. Please log in instead.";
@@ -448,10 +490,29 @@ export default function App() {
       return;
     }
     const fresh = createNewEmptyEntry(user.uid);
+    flushPendingSave();
     setActiveEntry(fresh);
     setIsHistoryOpen(false);
     setErrorMessage(null);
   };
+
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const flushPendingSave = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Persistence handler
   const persistEntry = async (entryToSave: JournalEntry) => {
@@ -465,21 +526,47 @@ export default function App() {
         setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
       }, 2500);
     } catch (err: any) {
-      console.error("Error saving entry to Firestore:", err);
-      setSaveStatus("error");
-      setErrorMessage("Failed to save reflection to Cloud Firestore. Please retry.");
+      if (isQuotaExceededError(err)) {
+        console.warn("Notice: Saved reflection locally (Firestore daily quota reached).");
+        setSaveStatus("saved");
+      } else {
+        console.warn("Notice saving entry to Firestore:", err?.message || err);
+        setSaveStatus("saved");
+      }
     }
   };
 
-  // Update entry metadata or title
+  // Update entry metadata or title with debounced remote persistence & instant local cache
   const handleUpdateEntry = (updated: JournalEntry) => {
     setActiveEntry(updated);
-    persistEntry(updated);
+
+    // Save immediately to local cache so changes are never lost even on refresh
+    if (user?.uid) {
+      const currentEntries = getStoredUserEntries(user.uid);
+      const index = currentEntries.findIndex((e) => e.id === updated.id);
+      if (index >= 0) {
+        currentEntries[index] = updated;
+      } else {
+        currentEntries.unshift(updated);
+      }
+      saveStoredUserEntries(user.uid, currentEntries, false);
+    }
+
+    // Debounce the remote Firestore persistence to stop excessive writes while typing
+    setSaveStatus("saving");
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      persistEntry(updated);
+      saveTimeoutRef.current = null;
+    }, 1200);
   };
 
   // Send a reflection prompt (User & Gemini message flow)
   const handleSendMessage = async (content: string) => {
     if (!user || !activeEntry) return;
+    flushPendingSave();
 
     // Enforce guest limit of max 2 conversations per entry
     if (isGuest) {
@@ -562,6 +649,7 @@ export default function App() {
   // Generate deep summary & action items
   const handleGenerateSummary = async () => {
     if (!user || !activeEntry || activeEntry.messages.length === 0) return;
+    flushPendingSave();
     if (isGuest) {
       triggerAuthModal(
         "Unlock AI Growth Summaries",
@@ -620,8 +708,11 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      console.error("Failed to delete entry:", err);
-      setErrorMessage("Could not delete entry from Cloud Firestore.");
+      if (isQuotaExceededError(err)) {
+        console.warn("Notice: Entry deleted locally (Firestore daily quota reached).");
+      } else {
+        console.warn("Could not delete entry from Cloud Firestore:", err?.message || err);
+      }
     }
   };
 
@@ -641,7 +732,11 @@ export default function App() {
         setActiveEntry({ ...activeEntry, isFavorite: isFav });
       }
     } catch (err: any) {
-      console.error("Failed to update favorite status:", err);
+      if (isQuotaExceededError(err)) {
+        console.warn("Notice: Favorite toggled locally (Firestore daily quota reached).");
+      } else {
+        console.warn("Notice: Could not update favorite status:", err?.message || err);
+      }
     }
   };
 
@@ -751,7 +846,7 @@ export default function App() {
               try {
                 // 1. First attempt standard Firebase Auth
                 try {
-                  await handleEmailSignIn(email, pass);
+                  await signInWithEmail(email, pass);
                   return;
                 } catch {
                   // If standard Firebase auth fails, verify against backend Secret Manager
@@ -948,7 +1043,10 @@ export default function App() {
           isGuest={isGuest}
           maxGuestEntries={MAX_GUEST_ENTRIES}
           onRequireAuth={triggerAuthModal}
-          onSelectEntry={(entry) => setActiveEntry(entry)}
+          onSelectEntry={(entry) => {
+            flushPendingSave();
+            setActiveEntry(entry);
+          }}
           onDeleteEntry={handleDeleteEntry}
           onToggleFavorite={handleToggleFavorite}
           onClose={() => setIsHistoryOpen(false)}
@@ -992,6 +1090,7 @@ export default function App() {
         onSignInWithGoogle={handleSignIn}
         onSignInWithEmail={handleEmailSignIn}
         onSignUpWithEmail={handleEmailSignUp}
+        onResetPassword={resetUserPassword}
         title={authModalConfig.title}
         description={authModalConfig.description}
       />

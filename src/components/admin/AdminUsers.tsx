@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { QueryDocumentSnapshot } from "firebase/firestore";
 import {
   Users,
   UserCheck,
@@ -23,6 +24,8 @@ import {
   X,
   MailX,
   BellOff,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
 import { AuthUser, UserProfile, AdminAuditLog, UserRole, UserAccountStatus, DeactivationAppeal } from "../../types";
 import {
@@ -32,7 +35,11 @@ import {
   adminToggleUserDigestSubscription,
   subscribeToAdminAuditLogs,
   subscribeToAppeals,
+  fetchPaginatedUsers,
+  fetchPaginatedAuditLogs,
+  triggerUserSeedingApi,
 } from "../../lib/adminService";
+import { AdminPagination } from "./AdminPagination";
 
 interface AdminUsersProps {
   currentUser: AuthUser;
@@ -49,6 +56,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
   onRefresh,
   onNavigateToAppeals,
 }) => {
+  const PAGE_SIZE = 20;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "deactivated" | "admin" | "user">("all");
   const [activeSubTab, setActiveSubTab] = useState<"directory" | "audit">("directory");
@@ -69,12 +78,45 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
   const [newStatus, setNewStatus] = useState<UserAccountStatus>("active");
   const [newWeeklyDigestEnabled, setNewWeeklyDigestEnabled] = useState(true);
 
-  // Audit logs state
-  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
-  const [isAuditLoading, setIsAuditLoading] = useState(true);
+  // Paginated users state (20 per page from Firestore, scalable to millions)
+  const [usersPage, setUsersPage] = useState(1);
+  const [userCursors, setUserCursors] = useState<(QueryDocumentSnapshot | null)[]>([null]);
+  const [paginatedUsers, setPaginatedUsers] = useState<UserProfile[]>([]);
+  const [usersTotalCount, setUsersTotalCount] = useState(0);
+  const [usersHasNextPage, setUsersHasNextPage] = useState(false);
+  const [isUsersQueryLoading, setIsUsersQueryLoading] = useState(false);
+
+  // Paginated audit logs state (20 per page from Firestore, scalable to millions)
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditCursors, setAuditCursors] = useState<(QueryDocumentSnapshot | null)[]>([null]);
+  const [paginatedAuditLogs, setPaginatedAuditLogs] = useState<AdminAuditLog[]>([]);
+  const [auditTotalCount, setAuditTotalCount] = useState(0);
+  const [auditHasNextPage, setAuditHasNextPage] = useState(false);
+  const [isAuditQueryLoading, setIsAuditQueryLoading] = useState(false);
 
   // Copy helper
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isSeedingApiLoading, setIsSeedingApiLoading] = useState(false);
+
+  const handleTriggerSeedApi = async () => {
+    setIsSeedingApiLoading(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await triggerUserSeedingApi();
+      if (res.success) {
+        setActionSuccess(res.message || "Admin user seeded successfully via API.");
+        if (onRefresh) onRefresh();
+        setTimeout(() => setActionSuccess(null), 4000);
+      } else {
+        setActionError(res.message || "Failed to trigger user seeding API.");
+      }
+    } catch (err: any) {
+      setActionError(err.message || "Network error while calling seeding API.");
+    } finally {
+      setIsSeedingApiLoading(false);
+    }
+  };
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -82,20 +124,134 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Subscribe to audit logs
-  useEffect(() => {
-    const unsub = subscribeToAdminAuditLogs(
-      (logs) => {
-        setAuditLogs(logs);
-        setIsAuditLoading(false);
-      },
-      (err) => {
-        console.warn("Audit logs stream error:", err);
-        setIsAuditLoading(false);
+  // Load paginated users with Firestore cursor
+  const loadUsersPage = useCallback(
+    async (page: number, cursor: QueryDocumentSnapshot | null) => {
+      setIsUsersQueryLoading(true);
+      try {
+        const result = await fetchPaginatedUsers({
+          pageSize: PAGE_SIZE,
+          cursorDoc: cursor,
+          statusFilter,
+          searchQuery,
+        });
+        setPaginatedUsers(result.users);
+        setUsersTotalCount(result.totalCount);
+        setUsersHasNextPage(result.hasNextPage);
+        setUsersPage(page);
+
+        if (result.lastDoc) {
+          setUserCursors((prev) => {
+            const nextCursors = [...prev];
+            nextCursors[page] = result.lastDoc;
+            return nextCursors;
+          });
+        }
+      } catch (err) {
+        console.warn("Notice loading paginated users:", err);
+      } finally {
+        setIsUsersQueryLoading(false);
       }
-    );
-    return () => unsub();
-  }, []);
+    },
+    [statusFilter, searchQuery]
+  );
+
+  // Load paginated audit logs with Firestore cursor
+  const loadAuditPage = useCallback(
+    async (page: number, cursor: QueryDocumentSnapshot | null) => {
+      setIsAuditQueryLoading(true);
+      try {
+        const result = await fetchPaginatedAuditLogs({
+          pageSize: PAGE_SIZE,
+          cursorDoc: cursor,
+        });
+        setPaginatedAuditLogs(result.logs);
+        setAuditTotalCount(result.totalCount);
+        setAuditHasNextPage(result.hasNextPage);
+        setAuditPage(page);
+
+        if (result.lastDoc) {
+          setAuditCursors((prev) => {
+            const nextCursors = [...prev];
+            nextCursors[page] = result.lastDoc;
+            return nextCursors;
+          });
+        }
+      } catch (err) {
+        console.warn("Notice loading paginated audit logs:", err);
+      } finally {
+        setIsAuditQueryLoading(false);
+      }
+    },
+    []
+  );
+
+  // Trigger paginated user load when filter or query changes
+  useEffect(() => {
+    setUserCursors([null]);
+    loadUsersPage(1, null);
+  }, [loadUsersPage]);
+
+  // Trigger paginated audit load when switching to audit subtab
+  useEffect(() => {
+    if (activeSubTab === "audit") {
+      setAuditCursors([null]);
+      loadAuditPage(1, null);
+    }
+  }, [activeSubTab, loadAuditPage]);
+
+  const handleUsersNext = () => {
+    if (usersHasNextPage && !isUsersQueryLoading) {
+      const nextCursor = userCursors[usersPage] || null;
+      loadUsersPage(usersPage + 1, nextCursor);
+    }
+  };
+
+  const handleUsersPrev = () => {
+    if (usersPage > 1 && !isUsersQueryLoading) {
+      const prevCursor = userCursors[usersPage - 2] || null;
+      loadUsersPage(usersPage - 1, prevCursor);
+    }
+  };
+
+  const handleUsersFirst = () => {
+    if (usersPage > 1 && !isUsersQueryLoading) {
+      setUserCursors([null]);
+      loadUsersPage(1, null);
+    }
+  };
+
+  const handleAuditNext = () => {
+    if (auditHasNextPage && !isAuditQueryLoading) {
+      const nextCursor = auditCursors[auditPage] || null;
+      loadAuditPage(auditPage + 1, nextCursor);
+    }
+  };
+
+  const handleAuditPrev = () => {
+    if (auditPage > 1 && !isAuditQueryLoading) {
+      const prevCursor = auditCursors[auditPage - 2] || null;
+      loadAuditPage(auditPage - 1, prevCursor);
+    }
+  };
+
+  const handleAuditFirst = () => {
+    if (auditPage > 1 && !isAuditQueryLoading) {
+      setAuditCursors([null]);
+      loadAuditPage(1, null);
+    }
+  };
+
+  const refreshCurrentUsers = () => {
+    const currentCursor = usersPage > 1 ? userCursors[usersPage - 1] : null;
+    loadUsersPage(usersPage, currentCursor);
+    if (onRefresh) onRefresh();
+  };
+
+  const refreshCurrentAudit = () => {
+    const currentCursor = auditPage > 1 ? auditCursors[auditPage - 1] : null;
+    loadAuditPage(auditPage, currentCursor);
+  };
 
   // Subscribe to appeals for status correlation
   useEffect(() => {
@@ -148,6 +304,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
       try {
         await setUserAccountStatus(currentUser, user.uid, user.email, "active");
         setActionSuccess(`Account for ${user.email} has been reactivated.`);
+        refreshCurrentUsers();
+        refreshCurrentAudit();
         setTimeout(() => setActionSuccess(null), 3000);
       } catch (err: any) {
         setActionError(err.message || "Failed to reactivate user account.");
@@ -172,6 +330,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
       );
       setActionSuccess(`Account for ${deactivatingUser.email} is now deactivated.`);
       setDeactivatingUser(null);
+      refreshCurrentUsers();
+      refreshCurrentAudit();
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {
       setActionError(err.message || "Failed to deactivate user account.");
@@ -194,6 +354,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
     try {
       await setUserRole(currentUser, user.uid, user.email, newRole);
       setActionSuccess(`Role for ${user.email} updated to ${newRole.toUpperCase()}.`);
+      refreshCurrentUsers();
+      refreshCurrentAudit();
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {
       setActionError(err.message || "Failed to update user role.");
@@ -223,6 +385,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
           nextSubscribed ? "Subscribed (ON)" : "Paused (OFF)"
         }.`
       );
+      refreshCurrentUsers();
+      refreshCurrentAudit();
       setTimeout(() => setActionSuccess(null), 3500);
     } catch (err: any) {
       setActionError(err.message || "Failed to update user digest subscription preference.");
@@ -249,6 +413,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
       setNewEmail("");
       setNewName("");
       setNewWeeklyDigestEnabled(true);
+      refreshCurrentUsers();
+      refreshCurrentAudit();
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err: any) {
       setActionError(err.message || "Failed to provision user.");
@@ -289,7 +455,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>User Directory ({users.length})</span>
+              <span>User Directory ({usersTotalCount > 0 ? usersTotalCount : users.length})</span>
             </button>
             <button
               id="subtab-audit-trail"
@@ -301,7 +467,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Security Audit Trail ({auditLogs.length})</span>
+              <span>Security Audit Trail ({auditTotalCount > 0 ? auditTotalCount : paginatedAuditLogs.length})</span>
             </button>
 
             {onNavigateToAppeals && (
@@ -333,6 +499,20 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                   <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-indigo-500" : ""}`} />
                 </button>
               )}
+              <button
+                id="btn-trigger-seed-api"
+                onClick={handleTriggerSeedApi}
+                disabled={isSeedingApiLoading}
+                title="Trigger backend user seeding API (matches CI/CD pipeline utility)"
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs"
+              >
+                {isSeedingApiLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                )}
+                <span>Trigger Seed API</span>
+              </button>
               <button
                 id="btn-add-user-modal"
                 onClick={() => setIsCreateModalOpen(true)}
@@ -422,8 +602,17 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {filteredUsers.length > 0 ? (
-                    filteredUsers.map((user) => {
+                  {isUsersQueryLoading ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                        <div className="flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Loading users from Firestore...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : paginatedUsers.length > 0 ? (
+                    paginatedUsers.map((user) => {
                       const isCurrent = user.uid === currentUser.uid;
                       const isActive = user.status === "active";
                       const isAdmin = user.role === "admin";
@@ -643,7 +832,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
                         No users match the search filter.
                       </td>
                     </tr>
@@ -651,15 +840,41 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                 </tbody>
               </table>
             </div>
+
+            {/* Scalable Firestore Pagination for User List */}
+            <AdminPagination
+              idPrefix="admin-users-pagination"
+              currentPage={usersPage}
+              pageSize={PAGE_SIZE}
+              totalCount={usersTotalCount}
+              hasNextPage={usersHasNextPage}
+              hasPrevPage={usersPage > 1}
+              isLoading={isUsersQueryLoading}
+              onNextPage={handleUsersNext}
+              onPrevPage={handleUsersPrev}
+              onFirstPage={handleUsersFirst}
+              itemLabel="users"
+            />
           </>
         )}
 
         {/* Audit Trail View */}
         {activeSubTab === "audit" && (
           <div className="space-y-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Immutable audit trail logging all administrative role assignments, user status changes, and credential activations.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Immutable audit trail logging all administrative role assignments, user status changes, and credential activations.
+              </p>
+              <button
+                onClick={refreshCurrentAudit}
+                disabled={isAuditQueryLoading}
+                title="Refresh Audit Logs"
+                className="self-start sm:self-auto p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all cursor-pointer shadow-2xs text-xs font-semibold flex items-center gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isAuditQueryLoading ? "animate-spin text-indigo-500" : ""}`} />
+                <span>Refresh Logs</span>
+              </button>
+            </div>
 
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
               <table className="w-full text-left text-xs">
@@ -673,8 +888,17 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {auditLogs.length > 0 ? (
-                    auditLogs.map((log) => (
+                  {isAuditQueryLoading ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
+                        <div className="flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Loading audit records from Firestore...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : paginatedAuditLogs.length > 0 ? (
+                    paginatedAuditLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
                         <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap font-mono text-[11px]">
                           {new Date(log.timestamp).toLocaleString()}
@@ -708,13 +932,28 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({
                   ) : (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-slate-400">
-                        {isAuditLoading ? "Loading security audit records..." : "No administrative actions recorded yet."}
+                        No administrative actions recorded yet.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Scalable Firestore Pagination for Security Audit Logs */}
+            <AdminPagination
+              idPrefix="admin-audit-pagination"
+              currentPage={auditPage}
+              pageSize={PAGE_SIZE}
+              totalCount={auditTotalCount}
+              hasNextPage={auditHasNextPage}
+              hasPrevPage={auditPage > 1}
+              isLoading={isAuditQueryLoading}
+              onNextPage={handleAuditNext}
+              onPrevPage={handleAuditPrev}
+              onFirstPage={handleAuditFirst}
+              itemLabel="audit records"
+            />
           </div>
         )}
       </div>

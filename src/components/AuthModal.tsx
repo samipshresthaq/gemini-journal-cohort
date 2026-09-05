@@ -22,6 +22,7 @@ interface AuthModalProps {
   onSignInWithGoogle: () => Promise<void>;
   onSignInWithEmail: (email: string, pass: string) => Promise<void>;
   onSignUpWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
+  onResetPassword?: (email: string) => Promise<void>;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -32,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSignInWithGoogle,
   onSignInWithEmail,
   onSignUpWithEmail,
+  onResetPassword,
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");
@@ -40,6 +42,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [isSubmittingEmail, setIsSubmittingEmail] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -80,28 +84,65 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) return;
     setIsSubmittingEmail(true);
     setAuthError(null);
+    setResetMessage(null);
     try {
       if (isRegistering) {
-        await onSignUpWithEmail(email, password, displayName.trim() || undefined);
+        await onSignUpWithEmail(cleanEmail, password, displayName.trim() || undefined);
       } else {
-        await onSignInWithEmail(email, password);
+        await onSignInWithEmail(cleanEmail, password);
       }
       onClose();
     } catch (err: any) {
       let msg = err?.message || "Authentication failed.";
-      if (err?.code === "auth/invalid-credential" || err?.code === "auth/wrong-password") {
-        msg = "Invalid email or password.";
+      if (
+        err?.code === "auth/invalid-credential" || 
+        err?.code === "auth/wrong-password" || 
+        err?.code === "auth/user-not-found"
+      ) {
+        msg = "Incorrect email or password. If you haven't created an account yet, please click 'Create Account' below.";
       } else if (err?.code === "auth/email-already-in-use") {
-        msg = "An account with this email already exists.";
+        msg = "An account with this email already exists. Please click 'Sign In' below.";
       } else if (err?.code === "auth/weak-password") {
         msg = "Password should be at least 6 characters.";
+      } else if (err?.code === "auth/invalid-email") {
+        msg = "Please enter a valid email address.";
+      } else if (err?.code === "auth/too-many-requests") {
+        msg = "Too many failed attempts. Please wait a moment and try again.";
       }
       setAuthError(msg);
     } finally {
       setIsSubmittingEmail(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setAuthError("Please enter your email address first, then click 'Forgot password?'.");
+      return;
+    }
+    if (!onResetPassword) return;
+
+    setIsResetting(true);
+    setAuthError(null);
+    setResetMessage(null);
+    try {
+      await onResetPassword(cleanEmail);
+      setResetMessage(`Password reset link sent to ${cleanEmail}. Please check your inbox.`);
+    } catch (err: any) {
+      if (err?.code === "auth/user-not-found") {
+        setAuthError("No account found with this email address. Please click 'Create Account' below.");
+      } else if (err?.code === "auth/invalid-email") {
+        setAuthError("Please enter a valid email address.");
+      } else {
+        setAuthError(err?.message || "Could not send password reset email. Please try again.");
+      }
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -232,9 +273,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Password
+                </label>
+                {!isRegistering && onResetPassword && (
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={isResetting}
+                    className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline cursor-pointer disabled:opacity-60"
+                  >
+                    {isResetting ? "Sending reset link..." : "Forgot password?"}
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -280,6 +333,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onClick={() => {
                       setIsRegistering(false);
                       setAuthError(null);
+                      setResetMessage(null);
                     }}
                     className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold underline cursor-pointer"
                   >
@@ -295,6 +349,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onClick={() => {
                       setIsRegistering(true);
                       setAuthError(null);
+                      setResetMessage(null);
                     }}
                     className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold underline cursor-pointer"
                   >
@@ -305,11 +360,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </form>
 
-          {/* Error Banner */}
+          {/* Success / Reset Feedback Banner */}
+          {resetMessage && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{resetMessage}</span>
+            </div>
+          )}
+
+          {/* Error Banner with helpful recovery actions */}
           {authError && (
-            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
-              <span>{authError}</span>
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 text-xs flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span className="font-medium">{authError}</span>
+              </div>
+              {!isRegistering && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegistering(true);
+                    setAuthError(null);
+                    setResetMessage(null);
+                  }}
+                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline self-start pl-6 cursor-pointer"
+                >
+                  Don't have an account yet? Switch to Create Account →
+                </button>
+              )}
+              {isRegistering && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegistering(false);
+                    setAuthError(null);
+                    setResetMessage(null);
+                  }}
+                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline self-start pl-6 cursor-pointer"
+                >
+                  Already registered? Switch to Sign In →
+                </button>
+              )}
             </div>
           )}
         </div>

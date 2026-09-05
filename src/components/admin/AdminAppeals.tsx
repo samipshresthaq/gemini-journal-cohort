@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { QueryDocumentSnapshot } from "firebase/firestore";
 import {
   ShieldAlert,
   CheckCircle2,
@@ -23,11 +24,12 @@ import {
 } from "lucide-react";
 import { AuthUser, DeactivationAppeal, AppealStatus, UserProfile } from "../../types";
 import {
-  subscribeToAppeals,
+  fetchPaginatedAppeals,
   updateAppealStatus,
   deleteAppeal,
 } from "../../lib/adminService";
 import { AdminAppealDetail } from "./AdminAppealDetail";
+import { AdminPagination } from "./AdminPagination";
 
 interface AdminAppealsProps {
   currentUser: AuthUser;
@@ -44,8 +46,19 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
   initialSelectedAppealId,
   onSelectedAppealChange,
 }) => {
-  const [appeals, setAppeals] = useState<DeactivationAppeal[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const PAGE_SIZE = 20;
+
+  // Paginated state (20 per page from Firestore, cursor queries scalable to millions)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [appealCursors, setAppealCursors] = useState<(QueryDocumentSnapshot | null)[]>([null]);
+  const [paginatedAppeals, setPaginatedAppeals] = useState<DeactivationAppeal[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [approvedCount, setApprovedCount] = useState(0);
+  const [rejectedCount, setRejectedCount] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AppealStatus | "all">("all");
   const [selectedAppeal, setSelectedAppeal] = useState<DeactivationAppeal | null>(null);
@@ -59,32 +72,82 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
     message: string;
   } | null>(null);
 
-  // Subscribe to real-time appeals from Firestore & backend
-  useEffect(() => {
-    setIsLoading(true);
-    const unsubscribe = subscribeToAppeals(
-      (items) => {
-        setAppeals(items);
-        setIsLoading(false);
-      },
-      (err) => {
-        console.warn("Real-time appeals listener notice:", err);
+  // Load paginated appeals with Firestore cursor
+  const loadAppealsPage = useCallback(
+    async (page: number, cursor: QueryDocumentSnapshot | null) => {
+      setIsLoading(true);
+      try {
+        const result = await fetchPaginatedAppeals({
+          pageSize: PAGE_SIZE,
+          cursorDoc: cursor,
+          statusFilter,
+          searchQuery,
+        });
+        setPaginatedAppeals(result.appeals);
+        setTotalCount(result.totalCount);
+        setPendingCount(result.pendingCount);
+        setApprovedCount(result.approvedCount);
+        setRejectedCount(result.rejectedCount);
+        setHasNextPage(result.hasNextPage);
+        setCurrentPage(page);
+
+        if (result.lastDoc) {
+          setAppealCursors((prev) => {
+            const nextCursors = [...prev];
+            nextCursors[page] = result.lastDoc;
+            return nextCursors;
+          });
+        }
+      } catch (err) {
+        console.warn("Notice loading paginated appeals:", err);
+      } finally {
         setIsLoading(false);
       }
-    );
+    },
+    [statusFilter, searchQuery]
+  );
 
-    return () => unsubscribe();
-  }, []);
+  // Reload when filter or search changes
+  useEffect(() => {
+    setAppealCursors([null]);
+    loadAppealsPage(1, null);
+  }, [loadAppealsPage]);
 
   // Deep-link / sync initialSelectedAppealId if passed
   useEffect(() => {
-    if (initialSelectedAppealId && appeals.length > 0 && !selectedAppeal) {
-      const match = appeals.find((a) => a.id === initialSelectedAppealId);
+    if (initialSelectedAppealId && paginatedAppeals.length > 0 && !selectedAppeal) {
+      const match = paginatedAppeals.find((a) => a.id === initialSelectedAppealId);
       if (match) {
         setSelectedAppeal(match);
       }
     }
-  }, [initialSelectedAppealId, appeals, selectedAppeal]);
+  }, [initialSelectedAppealId, paginatedAppeals, selectedAppeal]);
+
+  const handleNextPage = () => {
+    if (hasNextPage && !isLoading) {
+      const nextCursor = appealCursors[currentPage] || null;
+      loadAppealsPage(currentPage + 1, nextCursor);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1 && !isLoading) {
+      const prevCursor = appealCursors[currentPage - 2] || null;
+      loadAppealsPage(currentPage - 1, prevCursor);
+    }
+  };
+
+  const handleFirstPage = () => {
+    if (currentPage > 1 && !isLoading) {
+      setAppealCursors([null]);
+      loadAppealsPage(1, null);
+    }
+  };
+
+  const refreshCurrentPage = () => {
+    const currentCursor = appealCursors[currentPage - 1] || null;
+    loadAppealsPage(currentPage, currentCursor);
+  };
 
   const handleSelectAppeal = (app: DeactivationAppeal | null) => {
     setSelectedAppeal(app);
@@ -114,6 +177,7 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
         delete next[appeal.id];
         return next;
       });
+      refreshCurrentPage();
     } catch (err: any) {
       showToast("error", err?.message || "Failed to approve appeal.");
     } finally {
@@ -139,6 +203,7 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
         delete next[appeal.id];
         return next;
       });
+      refreshCurrentPage();
     } catch (err: any) {
       showToast("error", err?.message || "Failed to reject appeal.");
     } finally {
@@ -155,6 +220,7 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
 
       await updateAppealStatus(currentUser, appeal, "reviewed", note);
       showToast("success", `Appeal marked as reviewed.`);
+      refreshCurrentPage();
     } catch (err: any) {
       showToast("error", err?.message || "Failed to update appeal.");
     } finally {
@@ -169,8 +235,8 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
     setProcessingId(appealId);
     try {
       await deleteAppeal(appealId);
-      setAppeals((prev) => prev.filter((a) => a.id !== appealId));
       showToast("success", "Appeal record deleted.");
+      refreshCurrentPage();
     } catch (err: any) {
       showToast("error", err?.message || "Failed to delete appeal.");
     } finally {
@@ -178,27 +244,19 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
     }
   };
 
-  // Filtered appeals list
-  const filteredAppeals = appeals.filter((appeal) => {
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      appeal.userEmail.toLowerCase().includes(q) ||
-      appeal.userName.toLowerCase().includes(q) ||
-      appeal.subject.toLowerCase().includes(q) ||
-      appeal.message.toLowerCase().includes(q) ||
-      appeal.userId.toLowerCase().includes(q);
+  // Callbacks for AdminAppealDetail
+  const handleDetailAppealUpdated = useCallback((updated: DeactivationAppeal) => {
+    setSelectedAppeal(updated);
+    setPaginatedAppeals((prev) =>
+      prev.map((a) => (a.id === updated.id ? updated : a))
+    );
+  }, []);
 
-    const matchesStatus =
-      statusFilter === "all" ? true : appeal.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  const pendingCount = appeals.filter((a) => a.status === "pending").length;
-  const approvedCount = appeals.filter((a) => a.status === "approved").length;
-  const rejectedCount = appeals.filter((a) => a.status === "rejected").length;
-  const totalCount = appeals.length;
+  const handleDetailAppealDeleted = useCallback((deletedId: string) => {
+    setSelectedAppeal(null);
+    setPaginatedAppeals((prev) => prev.filter((a) => a.id !== deletedId));
+    setTotalCount((prev) => Math.max(0, prev - 1));
+  }, []);
 
   // Render Dedicated Appeal Detail View when an appeal is selected
   if (selectedAppeal) {
@@ -209,16 +267,8 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
         liveUsers={liveUsers}
         onBackToList={() => handleSelectAppeal(null)}
         onNavigateToUsers={onNavigateToUsers}
-        onAppealUpdated={(updated) => {
-          setSelectedAppeal(updated);
-          setAppeals((prev) =>
-            prev.map((a) => (a.id === updated.id ? updated : a))
-          );
-        }}
-        onAppealDeleted={(deletedId) => {
-          setSelectedAppeal(null);
-          setAppeals((prev) => prev.filter((a) => a.id !== deletedId));
-        }}
+        onAppealUpdated={handleDetailAppealUpdated}
+        onAppealDeleted={handleDetailAppealDeleted}
       />
     );
   }
@@ -269,19 +319,7 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
-              onClick={() => {
-                setIsLoading(true);
-                subscribeToAppeals(
-                  (items) => {
-                    setAppeals(items);
-                    setIsLoading(false);
-                  },
-                  (err) => {
-                    console.warn("[AdminAppeals] Refresh notice:", err?.message);
-                    setIsLoading(false);
-                  }
-                );
-              }}
+              onClick={() => refreshCurrentPage()}
               disabled={isLoading}
               title="Refresh Appeals"
               className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
@@ -395,29 +433,29 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
-            Reviewed ({appeals.filter((a) => a.status === "reviewed").length})
+            Reviewed
           </button>
         </div>
       </div>
 
       {/* Appeals Stream List */}
-      {filteredAppeals.length === 0 ? (
+      {paginatedAppeals.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-12 text-center space-y-3">
           <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
             <MessageSquare className="w-7 h-7" />
           </div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            {appeals.length === 0 ? "No Appeals Found in Firestore" : "No Appeals Match Filter"}
+            {totalCount === 0 ? "No Appeals Found in Firestore" : "No Appeals Match Filter"}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-            {appeals.length === 0
+            {totalCount === 0
               ? "When a deactivated user submits an appeal through their account deactivation screen, it will appear here in real-time."
               : "Try adjusting your search keywords or switching status filters."}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredAppeals.map((appeal) => {
+          {paginatedAppeals.map((appeal) => {
             const isProcessing = processingId === appeal.id;
             const isPending = appeal.status === "pending";
             const isApproved = appeal.status === "approved";
@@ -443,7 +481,17 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
                 }`}
               >
                 {/* Top User & Status Bar */}
-                <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/60">
+                <div
+                  className={`p-4 sm:p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                    isPending
+                      ? "bg-amber-50/70 dark:bg-amber-950/25 border-amber-100/80 dark:border-amber-900/40"
+                      : isApproved
+                      ? "bg-emerald-50/60 dark:bg-emerald-950/25 border-emerald-100/80 dark:border-emerald-900/40"
+                      : isRejected
+                      ? "bg-rose-50/60 dark:bg-rose-950/25 border-rose-100/80 dark:border-rose-900/40"
+                      : "bg-slate-50/90 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold text-sm flex items-center justify-center shadow-xs shrink-0">
                       {appeal.userName ? appeal.userName.charAt(0).toUpperCase() : appeal.userEmail.charAt(0).toUpperCase()}
@@ -692,6 +740,21 @@ export const AdminAppeals: React.FC<AdminAppealsProps> = ({
               </div>
             );
           })}
+
+          {/* Scalable Firestore Pagination Controls */}
+          <AdminPagination
+            idPrefix="admin-appeals-pagination"
+            currentPage={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={totalCount}
+            hasNextPage={hasNextPage}
+            hasPrevPage={currentPage > 1}
+            isLoading={isLoading}
+            onNextPage={handleNextPage}
+            onPrevPage={handlePrevPage}
+            onFirstPage={handleFirstPage}
+            itemLabel="appeals"
+          />
         </div>
       )}
     </div>

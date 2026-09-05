@@ -74,7 +74,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setDigestSubscribed(settings.enabled !== false);
     });
     return () => unsub();
-  }, [isOpen, user]);
+  }, [isOpen, user?.uid]);
 
   const handleToggleDigestSubscription = async () => {
     if (!user || user.uid.startsWith("guest_")) return;
@@ -84,7 +84,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       await saveDigestSettings(user.uid, { enabled: nextState });
       setDigestSubscribed(nextState);
     } catch (err: any) {
-      console.error("Failed to toggle digest subscription in profile:", err);
+      console.warn("Notice toggling digest subscription in profile:", err);
     } finally {
       setIsTogglingDigest(false);
     }

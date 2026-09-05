@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   ShieldAlert,
@@ -84,22 +84,37 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
     message: string;
   } | null>(null);
 
+  // Stable ref for parent callback to avoid re-subscribing on parent re-renders
+  const onAppealUpdatedRef = useRef(onAppealUpdated);
+  useEffect(() => {
+    onAppealUpdatedRef.current = onAppealUpdated;
+  }, [onAppealUpdated]);
+
+  const targetAppealId = initialAppeal.id;
+
+  // Track serialized state to avoid calling parent callback if snapshot contains identical data
+  const lastStateJsonRef = useRef<string>(JSON.stringify(initialAppeal));
+
   // Subscribe to real-time updates for this specific appeal document
   useEffect(() => {
-    if (!appeal.id) return;
+    if (!targetAppealId) return;
 
     // Only attach live Firestore snapshot if authenticated in Firebase Auth
     if (!auth.currentUser) return;
 
     try {
-      const appealRef = doc(db, "appeals", appeal.id);
+      const appealRef = doc(db, "appeals", targetAppealId);
       const unsub = onSnapshot(
         appealRef,
         (snap) => {
           if (snap.exists()) {
             const updated = { ...snap.data(), id: snap.id } as DeactivationAppeal;
-            setAppeal(updated);
-            onAppealUpdated?.(updated);
+            const updatedJson = JSON.stringify(updated);
+            if (updatedJson !== lastStateJsonRef.current) {
+              lastStateJsonRef.current = updatedJson;
+              setAppeal(updated);
+              onAppealUpdatedRef.current?.(updated);
+            }
           }
         },
         (err) => {
@@ -110,7 +125,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
     } catch (err: any) {
       console.warn("[AdminAppealDetail] Live listener setup notice:", err?.message);
     }
-  }, [appeal.id, onAppealUpdated]);
+  }, [targetAppealId]);
 
   const showToast = (type: "success" | "error", message: string) => {
     setFeedbackToast({ type, message });
@@ -527,7 +542,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                           >
                             {reply.senderName || (isUser ? "User" : "System Administrator")}
                           </span>
-                          <span className="text-slate-500 font-mono text-[11px]">
+                          <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                             ({reply.senderEmail})
                           </span>
                           <span
@@ -540,10 +555,10 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                             {isUser ? "User Follow-up" : "Admin Reply"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-400 text-[11px]">
+                        <div className="flex items-center gap-2 text-slate-400 dark:text-slate-400 text-[11px]">
                           <span>{new Date(reply.sentAt).toLocaleString()}</span>
                           {!isUser && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-200/50 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
                               <Check className="w-3 h-3" />
                               Sent to User Email
                             </span>
@@ -553,8 +568,8 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                       <p
                         className={`text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line pl-2 border-l-2 ${
                           isUser
-                            ? "border-amber-400 dark:border-amber-600"
-                            : "border-indigo-400 dark:border-indigo-600"
+                            ? "border-amber-400 dark:border-amber-500"
+                            : "border-indigo-400 dark:border-indigo-500"
                         }`}
                       >
                         {reply.message}
@@ -569,7 +584,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Send className="w-3.5 h-3.5 text-indigo-600" />
+                  <Send className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   Reply to User via Email
                 </label>
                 <span className="text-[11px] text-slate-400">
@@ -579,7 +594,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
 
               {/* Quick Template Chips */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-400 uppercase tracking-wider block">
                   Quick Response Templates:
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -588,7 +603,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => applyTemplate(tmpl.text)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-medium transition-colors cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 text-[11px] font-medium transition-colors cursor-pointer"
                     >
                       {tmpl.label}
                     </button>
@@ -602,7 +617,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
                 value={replyInput}
                 onChange={(e) => setReplyInput(e.target.value)}
                 placeholder={`Write your response to ${appeal.userName || appeal.userEmail}... This will be sent directly to their email address.`}
-                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all"
+                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 dark:focus:border-indigo-500 transition-all"
               />
 
               <div className="flex items-center justify-between gap-3 pt-1">

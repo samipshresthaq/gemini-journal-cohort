@@ -5,6 +5,7 @@ import {
   signInWithPopup, 
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   updateProfile,
   signOut as fbSignOut, 
   onAuthStateChanged,
@@ -123,7 +124,32 @@ export async function signInWithEmail(email: string, pass: string) {
       (friendlyErr as any).code = error.code;
       throw friendlyErr;
     }
-    console.error("Firebase Email Sign-In Error:", error);
+    const code =
+      error?.code ||
+      (typeof error?.message === "string" ? error.message.match(/auth\/[a-z-]+/)?.[0] : undefined);
+
+    if (code && !error.code) {
+      error.code = code;
+    }
+
+    const isExpectedUserAuthError = [
+      "auth/invalid-credential",
+      "auth/wrong-password",
+      "auth/user-not-found",
+      "auth/invalid-email",
+      "auth/user-disabled",
+      "auth/too-many-requests"
+    ].includes(code as string) || (typeof error?.message === "string" && (
+      error.message.includes("invalid-credential") ||
+      error.message.includes("wrong-password") ||
+      error.message.includes("user-not-found")
+    ));
+
+    if (isExpectedUserAuthError) {
+      console.warn("Firebase Email Sign-In notice:", code || error?.message);
+    } else {
+      console.warn("Firebase Email Sign-In notice:", error?.message || error);
+    }
     throw error;
   }
 }
@@ -146,7 +172,38 @@ export async function signUpWithEmail(email: string, pass: string, displayName?:
       (friendlyErr as any).code = error.code;
       throw friendlyErr;
     }
-    console.error("Firebase Email Sign-Up Error:", error);
+    const isExpectedUserAuthError = [
+      "auth/email-already-in-use",
+      "auth/weak-password",
+      "auth/invalid-email"
+    ].includes(error?.code);
+
+    if (isExpectedUserAuthError) {
+      console.warn("Firebase Email Sign-Up notice:", error?.code || error?.message);
+    } else {
+      console.error("Firebase Email Sign-Up Error:", error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Send password reset email
+ */
+export async function resetUserPassword(email: string) {
+  try {
+    await sendPasswordResetEmail(auth, email.trim());
+  } catch (error: any) {
+    const isExpected = [
+      "auth/invalid-email",
+      "auth/user-not-found",
+      "auth/too-many-requests"
+    ].includes(error?.code);
+    if (isExpected) {
+      console.warn("Password reset notice:", error?.code || error?.message);
+    } else {
+      console.error("Password reset error:", error);
+    }
     throw error;
   }
 }

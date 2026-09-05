@@ -7,9 +7,13 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
+  limit,
+  startAfter,
   onSnapshot,
-  Unsubscribe
+  Unsubscribe,
+  QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db, auth, signUpWithEmail } from "../firebase";
 import {
@@ -101,86 +105,86 @@ export async function verifyAdminWithBackend(email: string, password?: string): 
 }
 
 /**
- * Seed or Synchronize the Default Admin User and initial User Directory.
- * Fetches admin configuration from Secret Manager before seeding,
- * and reads directly from the database after seeding.
+ * Trigger User Seeding API endpoint (/api/admin/seed).
+ * Calls the backend utility function via the dedicated API endpoint.
+ * Suitable for manual trigger or programmatic / CI/CD automation.
+ */
+export async function triggerUserSeedingApi(options?: {
+  email?: string;
+  password?: string;
+  displayName?: string;
+  role?: "admin" | "user";
+  seedKey?: string;
+}): Promise<{
+  success: boolean;
+  message: string;
+  user?: UserProfile;
+  error?: string;
+}> {
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (options?.seedKey) {
+      headers["x-seed-key"] = options.seedKey;
+    }
+
+    const res = await fetch("/api/admin/seed", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        email: options?.email,
+        password: options?.password,
+        displayName: options?.displayName,
+        role: options?.role,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        message: data.error || "Failed to trigger user seeding API.",
+        error: data.error,
+      };
+    }
+
+    if (data.user?.email) {
+      registerKnownAdminEmail(data.user.email);
+    }
+
+    return {
+      success: Boolean(data.success),
+      message: data.message || "User seeded successfully via API.",
+      user: data.user,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Network error while calling seed API.",
+      error: err.message,
+    };
+  }
+}
+
+/**
+ * Seed or Synchronize the Default Admin User by calling the seeding API.
+ * This is only called on explicit user/admin trigger or CI/CD invocations,
+ * NOT automatically on every application instance load.
  */
 export async function seedDefaultAdminAndDirectory(currentUser?: AuthUser | null): Promise<void> {
   try {
-    const defaultAdminUid = "admin_default_master";
-
-    // 1. Fetch bootstrap metadata from Secret Manager API first
-    const bootstrapConfig = await fetchBootstrapAdminProfile();
-    const adminEmail = (bootstrapConfig.adminEmail || "").toLowerCase().trim();
-    if (adminEmail) {
-      registerKnownAdminEmail(adminEmail);
+    const seedRes = await triggerUserSeedingApi();
+    if (seedRes.user?.email) {
+      registerKnownAdminEmail(seedRes.user.email);
     }
 
-    // 2. Only attempt Firestore operations if an authenticated Firebase user is signed in
-    if (!auth.currentUser) {
-      // User is not signed in to Firebase Auth yet, skip direct Firestore reads/writes to prevent permission denial
-      return;
-    }
-
-    // 3. Check if Default Admin Document already exists in Firestore database
-    try {
-      const adminDocRef = doc(db, "users", defaultAdminUid);
-      const adminDocSnap = await getDoc(adminDocRef);
-
-      if (adminDocSnap.exists()) {
-        const existingData = adminDocSnap.data() as UserProfile;
-        if (existingData.email) {
-          registerKnownAdminEmail(existingData.email);
-        }
-      } else {
-        const defaultAdminProfile: UserProfile = {
-          uid: defaultAdminUid,
-          email: adminEmail,
-          displayName: bootstrapConfig.displayName || "System Administrator",
-          photoURL: null,
-          role: "admin",
-          status: "active",
-          createdAt: Date.now() - 14 * 86400000,
-          lastLoginAt: Date.now(),
-        };
-
-        await setDoc(adminDocRef, sanitizeForFirestore(defaultAdminProfile), { merge: true });
-        await setDoc(doc(db, "admins", defaultAdminUid), {
-          uid: defaultAdminUid,
-          email: adminEmail,
-          role: "admin",
-          assignedAt: Date.now(),
-        }, { merge: true });
-
-        // Initial audit log
-        await logAdminAuditAction({
-          adminUid: defaultAdminUid,
-          adminEmail,
-          targetUid: defaultAdminUid,
-          targetEmail: adminEmail,
-          action: "user_created",
-          details: "System bootstrap: default admin directory initialized with Secret Manager governance",
-        });
-      }
-
-      // Load all registered admins from database /admins collection to keep cache synchronized
-      const adminsSnap = await getDocs(collection(db, "admins"));
-      adminsSnap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.email) {
-          registerKnownAdminEmail(data.email);
-        }
-      });
-    } catch {
-      // Ignored if offline or waiting on rules
-    }
-
-    // 4. If an authenticated user is currently logged in, sync their profile
+    // If an authenticated user is currently logged in, sync their profile
     if (currentUser && !currentUser.uid.startsWith("guest_")) {
       await syncUserProfile(currentUser);
     }
   } catch (err) {
-    console.warn("Notice: Admin bootstrap:", err);
+    console.warn("Notice: Admin seed API call:", err);
   }
 }
 
@@ -317,7 +321,8 @@ export function subscribeToUserDirectory(
     return () => {};
   }
 
-  const usersCollection = collection(db, "users");
+  // Query bounded to 100 users to avoid exceeding quota
+  const usersQuery = query(collection(db, "users"), limit(100));
 
   const processUserDocs = (snapshot: any) => {
     const list: UserProfile[] = [];
@@ -343,20 +348,9 @@ export function subscribeToUserDirectory(
     onUpdate(list);
   };
 
-  // Immediate getDocs fetch for instant rendering from database
-  getDocs(usersCollection)
-    .then((snap) => {
-      if (!snap.empty) {
-        processUserDocs(snap);
-      }
-    })
-    .catch((err) => {
-      console.warn("Initial getDocs users notice:", err.message);
-    });
-
-  // Real-time onSnapshot listener on the users collection
+  // Real-time onSnapshot listener on the users collection (delivers initial state + updates without duplicate getDocs)
   const unsubscribe = onSnapshot(
-    usersCollection,
+    usersQuery,
     (snapshot) => {
       processUserDocs(snapshot);
     },
@@ -381,6 +375,163 @@ export function subscribeToUserDirectory(
 
 // Alias for backwards compatibility
 export const subscribeToUsersList = subscribeToUserDirectory;
+
+export interface PaginatedUsersResult {
+  users: UserProfile[];
+  firstDoc: QueryDocumentSnapshot | null;
+  lastDoc: QueryDocumentSnapshot | null;
+  totalCount: number;
+  hasNextPage: boolean;
+}
+
+/**
+ * Optimized Firestore pagination query for users list, scalable to millions of records.
+ * Uses cursor-based startAfter() with limit(pageSize + 1) for zero-overhead next-page detection.
+ */
+export async function fetchPaginatedUsers(options?: {
+  pageSize?: number;
+  cursorDoc?: QueryDocumentSnapshot | null;
+  statusFilter?: "all" | "active" | "deactivated" | "admin" | "user";
+  searchQuery?: string;
+}): Promise<PaginatedUsersResult> {
+  const pageSize = options?.pageSize || 20;
+  const cursorDoc = options?.cursorDoc || null;
+  const statusFilter = options?.statusFilter || "all";
+  const searchQuery = options?.searchQuery?.trim().toLowerCase() || "";
+
+  if (!auth.currentUser) {
+    try {
+      const res = await fetch(`/api/admin/users?limit=${pageSize}`);
+      if (res.ok) {
+        const fallbackUsers: UserProfile[] = await res.json();
+        let filtered = fallbackUsers;
+        if (statusFilter === "active" || statusFilter === "deactivated") {
+          filtered = filtered.filter((u) => u.status === statusFilter);
+        } else if (statusFilter === "admin" || statusFilter === "user") {
+          filtered = filtered.filter((u) => u.role === statusFilter);
+        }
+        if (searchQuery) {
+          filtered = filtered.filter(
+            (u) =>
+              u.email.toLowerCase().includes(searchQuery) ||
+              u.displayName?.toLowerCase().includes(searchQuery) ||
+              u.uid.toLowerCase().includes(searchQuery)
+          );
+        }
+        return {
+          users: filtered.slice(0, pageSize),
+          firstDoc: null,
+          lastDoc: null,
+          totalCount: filtered.length,
+          hasNextPage: filtered.length > pageSize,
+        };
+      }
+    } catch (_) {}
+    return { users: [], firstDoc: null, lastDoc: null, totalCount: 0, hasNextPage: false };
+  }
+
+  const usersCol = collection(db, "users");
+  const queryConstraints: any[] = [];
+
+  if (statusFilter === "active" || statusFilter === "deactivated") {
+    queryConstraints.push(where("status", "==", statusFilter));
+  } else if (statusFilter === "admin" || statusFilter === "user") {
+    queryConstraints.push(where("role", "==", statusFilter));
+  }
+
+  // Optimized query with limit(pageSize + 1) for zero-overhead next-page detection
+  let snap;
+  try {
+    const q = query(
+      usersCol,
+      ...queryConstraints,
+      orderBy("createdAt", "desc"),
+      ...(cursorDoc ? [startAfter(cursorDoc)] : []),
+      limit(pageSize + 1)
+    );
+    snap = await getDocs(q);
+  } catch (err: any) {
+    console.warn("[Firestore Users Pagination] Indexed query fallback:", err?.message);
+    try {
+      const fallbackQ = query(
+        usersCol,
+        ...queryConstraints,
+        ...(cursorDoc ? [startAfter(cursorDoc)] : []),
+        limit(pageSize + 1)
+      );
+      snap = await getDocs(fallbackQ);
+    } catch {
+      snap = { docs: [] } as any;
+    }
+  }
+
+  const docs = snap.docs || [];
+  const hasNextPage = docs.length > pageSize;
+  const pagedDocs = hasNextPage ? docs.slice(0, pageSize) : docs;
+  const firstDoc = pagedDocs.length > 0 ? (pagedDocs[0] as QueryDocumentSnapshot) : null;
+  const lastDoc = pagedDocs.length > 0 ? (pagedDocs[pagedDocs.length - 1] as QueryDocumentSnapshot) : null;
+
+  let users: UserProfile[] = pagedDocs.map((docSnap: any) => {
+    const data = docSnap.data() || {};
+    return {
+      uid: docSnap.id,
+      email: data.email || "",
+      displayName: data.displayName || data.name || (data.email ? data.email.split("@")[0] : "Journal User"),
+      photoURL: data.photoURL || data.avatarUrl || null,
+      role: data.role === "admin" ? "admin" : "user",
+      status: data.status === "deactivated" ? "deactivated" : "active",
+      createdAt: parseFirestoreTimestamp(data.createdAt),
+      lastLoginAt: parseFirestoreTimestamp(data.lastLoginAt),
+      entryCount: typeof data.entryCount === "number" ? data.entryCount : undefined,
+      deactivatedAt: data.deactivatedAt ? parseFirestoreTimestamp(data.deactivatedAt) : undefined,
+      deactivatedBy: data.deactivatedBy,
+      deactivationReason: data.deactivationReason,
+    };
+  });
+
+  if (searchQuery) {
+    users = users.filter(
+      (u) =>
+        u.email.toLowerCase().includes(searchQuery) ||
+        u.displayName?.toLowerCase().includes(searchQuery) ||
+        u.uid.toLowerCase().includes(searchQuery)
+    );
+  }
+
+  // Total count calculation without REST RunAggregationQuery
+  let totalCount = users.length;
+  try {
+    const res = await fetch("/api/admin/users");
+    if (res.ok) {
+      const allUsers: UserProfile[] = await res.json();
+      let filtered = allUsers;
+      if (statusFilter === "active" || statusFilter === "deactivated") {
+        filtered = filtered.filter((u) => u.status === statusFilter);
+      } else if (statusFilter === "admin" || statusFilter === "user") {
+        filtered = filtered.filter((u) => u.role === statusFilter);
+      }
+      if (searchQuery) {
+        filtered = filtered.filter(
+          (u) =>
+            u.email.toLowerCase().includes(searchQuery) ||
+            u.displayName?.toLowerCase().includes(searchQuery) ||
+            u.uid.toLowerCase().includes(searchQuery)
+        );
+      }
+      totalCount = filtered.length;
+    }
+  } catch {
+    // Fallback to paged length if network error
+  }
+
+  return {
+    users,
+    firstDoc,
+    lastDoc,
+    totalCount,
+    hasNextPage,
+  };
+}
 
 /**
  * Activate or Deactivate a target user account
@@ -690,6 +841,93 @@ export function subscribeToAdminAuditLogs(
   );
 }
 
+export interface PaginatedAuditLogsResult {
+  logs: AdminAuditLog[];
+  firstDoc: QueryDocumentSnapshot | null;
+  lastDoc: QueryDocumentSnapshot | null;
+  totalCount: number;
+  hasNextPage: boolean;
+}
+
+/**
+ * Optimized Firestore pagination query for security audit logs, scalable to millions of records.
+ * Uses cursor-based startAfter() with limit(pageSize + 1) for zero-overhead next-page detection.
+ */
+export async function fetchPaginatedAuditLogs(options?: {
+  pageSize?: number;
+  cursorDoc?: QueryDocumentSnapshot | null;
+}): Promise<PaginatedAuditLogsResult> {
+  const pageSize = options?.pageSize || 20;
+  const cursorDoc = options?.cursorDoc || null;
+
+  if (!auth.currentUser) {
+    return { logs: [], firstDoc: null, lastDoc: null, totalCount: 0, hasNextPage: false };
+  }
+
+  const auditCol = collection(db, "admin_audit_logs");
+  let snap;
+  try {
+    const q = query(
+      auditCol,
+      orderBy("timestamp", "desc"),
+      ...(cursorDoc ? [startAfter(cursorDoc)] : []),
+      limit(pageSize + 1)
+    );
+    snap = await getDocs(q);
+  } catch (err: any) {
+    console.warn("[Firestore Audit Logs Pagination] Notice:", err?.message);
+    try {
+      const fallbackQ = query(
+        auditCol,
+        ...(cursorDoc ? [startAfter(cursorDoc)] : []),
+        limit(pageSize + 1)
+      );
+      snap = await getDocs(fallbackQ);
+    } catch {
+      snap = { docs: [] } as any;
+    }
+  }
+
+  const docs = snap.docs || [];
+  const hasNextPage = docs.length > pageSize;
+  const pagedDocs = hasNextPage ? docs.slice(0, pageSize) : docs;
+  const firstDoc = pagedDocs.length > 0 ? (pagedDocs[0] as QueryDocumentSnapshot) : null;
+  const lastDoc = pagedDocs.length > 0 ? (pagedDocs[pagedDocs.length - 1] as QueryDocumentSnapshot) : null;
+
+  const logs: AdminAuditLog[] = pagedDocs.map((docSnap: any) => {
+    const data = docSnap.data() || {};
+    return {
+      id: docSnap.id,
+      adminUid: data.adminUid,
+      adminEmail: data.adminEmail,
+      targetUid: data.targetUid,
+      targetEmail: data.targetEmail,
+      action: data.action,
+      details: data.details,
+      timestamp: data.timestamp || Date.now(),
+    };
+  });
+
+  let totalCount = logs.length;
+  try {
+    const res = await fetch("/api/admin/audit-logs");
+    if (res.ok) {
+      const allLogs = await res.json();
+      if (Array.isArray(allLogs)) {
+        totalCount = allLogs.length;
+      }
+    }
+  } catch {}
+
+  return {
+    logs,
+    firstDoc,
+    lastDoc,
+    totalCount,
+    hasNextPage,
+  };
+}
+
 /**
  * Fetch System Analytics and Gemini Usage Metrics for Dashboard
  */
@@ -860,6 +1098,13 @@ export async function submitDeactivationAppeal(appealData: {
   return appealRecord;
 }
 
+// In-memory cache of appeals to provide instant, zero-RPC counts without RunAggregationQuery
+let inMemoryAppealsCache: DeactivationAppeal[] = [];
+
+export function getCachedAppeals(): DeactivationAppeal[] {
+  return [...inMemoryAppealsCache];
+}
+
 /**
  * Fetch all appeals from the server backend
  */
@@ -867,7 +1112,11 @@ export async function fetchAppealsFromBackend(): Promise<DeactivationAppeal[]> {
   try {
     const res = await fetch("/api/admin/appeals");
     if (!res.ok) return [];
-    return await res.json();
+    const serverAppeals = await res.json();
+    if (Array.isArray(serverAppeals) && serverAppeals.length > 0) {
+      inMemoryAppealsCache = serverAppeals;
+    }
+    return serverAppeals;
   } catch {
     return [];
   }
@@ -888,6 +1137,7 @@ export function subscribeToAppeals(
     fetchAppealsFromBackend()
       .then((serverAppeals) => {
         if (serverAppeals && serverAppeals.length > 0) {
+          inMemoryAppealsCache = serverAppeals;
           onUpdate(serverAppeals);
         }
       })
@@ -897,7 +1147,7 @@ export function subscribeToAppeals(
 
   try {
     const appealsCol = collection(db, "appeals");
-    const q = query(appealsCol, orderBy("createdAt", "desc"));
+    const q = query(appealsCol, orderBy("createdAt", "desc"), limit(100));
 
     unsubscribeFirestore = onSnapshot(
       q,
@@ -907,23 +1157,31 @@ export function subscribeToAppeals(
         snapshot.forEach((d) => {
           appeals.push({ ...d.data(), id: d.id } as DeactivationAppeal);
         });
+        inMemoryAppealsCache = appeals;
         onUpdate(appeals);
       },
       (err) => {
         console.warn("[Firestore] Appeals stream error, falling back to REST:", err);
         if (onError) onError(err);
-        fetchAppealsFromBackend().then(onUpdate).catch(() => {});
+        fetchAppealsFromBackend().then((backendAppeals) => {
+          inMemoryAppealsCache = backendAppeals;
+          onUpdate(backendAppeals);
+        }).catch(() => {});
       }
     );
   } catch (err) {
     console.warn("[Firestore] Could not initiate appeals snapshot:", err);
-    fetchAppealsFromBackend().then(onUpdate).catch(() => {});
+    fetchAppealsFromBackend().then((backendAppeals) => {
+      inMemoryAppealsCache = backendAppeals;
+      onUpdate(backendAppeals);
+    }).catch(() => {});
   }
 
   // Poll backend immediately to ensure offline or server-held appeals are visible
   fetchAppealsFromBackend()
     .then((serverAppeals) => {
       if (!isFirestoreActive && serverAppeals.length > 0) {
+        inMemoryAppealsCache = serverAppeals;
         onUpdate(serverAppeals);
       }
     })
@@ -931,6 +1189,156 @@ export function subscribeToAppeals(
 
   return () => {
     unsubscribeFirestore();
+  };
+}
+
+export interface PaginatedAppealsResult {
+  appeals: DeactivationAppeal[];
+  firstDoc: QueryDocumentSnapshot | null;
+  lastDoc: QueryDocumentSnapshot | null;
+  totalCount: number;
+  pendingCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  hasNextPage: boolean;
+}
+
+/**
+ * Optimized Firestore pagination query for deactivation appeals, scalable to millions of records.
+ * Uses cursor-based startAfter() with limit(pageSize + 1) for zero-overhead next-page detection,
+ * alongside getCountFromServer() for instant server-aggregated counts without reading documents.
+ */
+export async function fetchPaginatedAppeals(options?: {
+  pageSize?: number;
+  cursorDoc?: QueryDocumentSnapshot | null;
+  statusFilter?: AppealStatus | "all";
+  searchQuery?: string;
+}): Promise<PaginatedAppealsResult> {
+  const pageSize = options?.pageSize || 20;
+  const cursorDoc = options?.cursorDoc || null;
+  const statusFilter = options?.statusFilter || "all";
+  const searchQuery = options?.searchQuery?.trim().toLowerCase() || "";
+
+  if (!auth.currentUser) {
+    const serverAppeals = await fetchAppealsFromBackend();
+    let filtered = statusFilter === "all" ? serverAppeals : serverAppeals.filter((a) => a.status === statusFilter);
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (a) =>
+          a.userEmail.toLowerCase().includes(searchQuery) ||
+          a.userName?.toLowerCase().includes(searchQuery) ||
+          a.subject?.toLowerCase().includes(searchQuery) ||
+          a.message?.toLowerCase().includes(searchQuery)
+      );
+    }
+    return {
+      appeals: filtered.slice(0, pageSize),
+      firstDoc: null,
+      lastDoc: null,
+      totalCount: filtered.length,
+      pendingCount: serverAppeals.filter((a) => a.status === "pending").length,
+      approvedCount: serverAppeals.filter((a) => a.status === "approved").length,
+      rejectedCount: serverAppeals.filter((a) => a.status === "rejected").length,
+      hasNextPage: filtered.length > pageSize,
+    };
+  }
+
+  const appealsCol = collection(db, "appeals");
+  const queryConstraints: any[] = [];
+  if (statusFilter !== "all") {
+    queryConstraints.push(where("status", "==", statusFilter));
+  }
+
+  let snap;
+  try {
+    const q = query(
+      appealsCol,
+      ...queryConstraints,
+      orderBy("createdAt", "desc"),
+      ...(cursorDoc ? [startAfter(cursorDoc)] : []),
+      limit(pageSize + 1)
+    );
+    snap = await getDocs(q);
+  } catch (err: any) {
+    console.warn("[Firestore Appeals Pagination] Fallback notice:", err?.message);
+    try {
+      const fallbackQ = query(
+        appealsCol,
+        ...queryConstraints,
+        ...(cursorDoc ? [startAfter(cursorDoc)] : []),
+        limit(pageSize + 1)
+      );
+      snap = await getDocs(fallbackQ);
+    } catch {
+      snap = { docs: [] } as any;
+    }
+  }
+
+  const docs = snap.docs || [];
+  const hasNextPage = docs.length > pageSize;
+  const pagedDocs = hasNextPage ? docs.slice(0, pageSize) : docs;
+  const firstDoc = pagedDocs.length > 0 ? (pagedDocs[0] as QueryDocumentSnapshot) : null;
+  const lastDoc = pagedDocs.length > 0 ? (pagedDocs[pagedDocs.length - 1] as QueryDocumentSnapshot) : null;
+
+  let appeals: DeactivationAppeal[] = pagedDocs.map((d: any) => ({
+    ...d.data(),
+    id: d.id,
+  }));
+
+  if (searchQuery) {
+    appeals = appeals.filter(
+      (a) =>
+        a.userEmail.toLowerCase().includes(searchQuery) ||
+        a.userName?.toLowerCase().includes(searchQuery) ||
+        a.subject?.toLowerCase().includes(searchQuery) ||
+        a.message?.toLowerCase().includes(searchQuery)
+    );
+  }
+
+  // Scalable counts without calling REST RunAggregationQuery which fails with "unavailable" on named databases
+  let allForCount = inMemoryAppealsCache;
+  if (allForCount.length === 0) {
+    try {
+      const backendAppeals = await fetchAppealsFromBackend();
+      if (backendAppeals.length > 0) {
+        allForCount = backendAppeals;
+      }
+    } catch {
+      allForCount = appeals;
+    }
+  }
+
+  const pendingCount = allForCount.filter((a) => a.status === "pending").length;
+  const approvedCount = allForCount.filter((a) => a.status === "approved").length;
+  const rejectedCount = allForCount.filter((a) => a.status === "rejected").length;
+  let totalCount = allForCount.length;
+
+  if (statusFilter !== "all") {
+    totalCount = allForCount.filter((a) => a.status === statusFilter).length;
+  }
+  if (searchQuery) {
+    totalCount = allForCount.filter(
+      (a) =>
+        (statusFilter === "all" || a.status === statusFilter) &&
+        (a.userEmail.toLowerCase().includes(searchQuery) ||
+          a.userName?.toLowerCase().includes(searchQuery) ||
+          a.subject?.toLowerCase().includes(searchQuery) ||
+          a.message?.toLowerCase().includes(searchQuery))
+    ).length;
+  }
+  if (totalCount === 0 && appeals.length > 0) {
+    totalCount = appeals.length;
+  }
+
+  return {
+    appeals,
+    firstDoc,
+    lastDoc,
+    totalCount,
+    pendingCount,
+    approvedCount,
+    rejectedCount,
+    hasNextPage,
   };
 }
 

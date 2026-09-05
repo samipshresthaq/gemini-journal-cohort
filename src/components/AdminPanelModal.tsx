@@ -127,7 +127,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         setIsLoading(false);
       },
       (err) => {
-        console.error("Failed to load user directory:", err);
+        console.warn("Notice loading user directory:", err);
         setActionErrorMessage("Could not load user directory. Please check network connection.");
         setIsLoading(false);
       }

@@ -103,8 +103,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const data = await fetchAdminAnalytics(days, liveUsers);
       setAnalytics(data);
     } catch (err: any) {
-      console.error("Failed to load admin analytics:", err);
-      setError(err.message || "Failed to load dashboard metrics.");
+      console.warn("Notice loading admin analytics:", err);
+      setError(err.message || "Notice: Dashboard metrics running in cached mode.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -113,7 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     loadMetrics(timeframeDays);
-  }, [timeframeDays, liveUsers]);
+  }, [timeframeDays, liveUsers?.length]);
 
   // Model pie chart data formatted
   const pieChartData = useMemo(() => {

@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import nodemailer from "nodemailer";
 import cron from "node-cron";
 import { accessSecret, getAdminCredentials } from "./serverSecrets";
+import { seedAdminUser, getSeededUsers } from "./src/server/seedUser";
 import {
   generateWeeklyDigestHtml,
   generateAccountStatusEmail,
@@ -823,6 +824,78 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
     }
   });
 
+  // Trigger seeding of admin user via API (can be invoked by CI/CD pipeline or admin client)
+  app.post(["/api/admin/seed", "/api/admin/seed-user", "/api/admin/seed-users"], async (req: Request, res: Response) => {
+    try {
+      // Optional security validation for CI/CD or external invocation
+      const seedKeyHeader = req.headers["x-seed-key"] || req.headers["authorization"];
+      const configuredSeedSecret = process.env.SEED_SECRET || process.env.ADMIN_PASSWORD;
+
+      if (configuredSeedSecret && seedKeyHeader) {
+        const cleanProvided = String(seedKeyHeader).replace(/^Bearer\s+/i, "").trim();
+        if (cleanProvided !== configuredSeedSecret) {
+          res.status(401).json({ error: "Invalid seed authorization token." });
+          return;
+        }
+      }
+
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await seedAdminUser({
+        email: body.email,
+        password: body.password,
+        displayName: body.displayName,
+        role: body.role,
+        uid: body.uid,
+        status: body.status,
+      });
+
+      // Synchronize in-memory serverManagedUsers
+      const existingIdx = serverManagedUsers.findIndex((u) => u.uid === result.user.uid || u.email === result.user.email);
+      const userEntry = {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        photoURL: null,
+        role: result.user.role,
+        status: result.user.status,
+        createdAt: result.user.createdAt,
+        lastLoginAt: result.user.lastLoginAt,
+      };
+
+      if (existingIdx >= 0) {
+        serverManagedUsers[existingIdx] = userEntry;
+      } else {
+        serverManagedUsers.unshift(userEntry);
+      }
+
+      res.status(200).json(result);
+    } catch (error: any) {
+      console.error("[API Error] /api/admin/seed:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Failed to execute user seeding.",
+      });
+    }
+  });
+
+  // Check seeding status and CI/CD readiness
+  app.get("/api/admin/seed/status", async (_req: Request, res: Response) => {
+    try {
+      const seeded = getSeededUsers();
+      const adminCreds = await getAdminCredentials();
+      res.json({
+        hasSeeded: seeded.length > 0,
+        seededCount: seeded.length,
+        seededUsers: seeded,
+        adminConfigured: adminCreds.isConfigured,
+        adminEmail: adminCreds.adminEmail,
+        cicdReady: true,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to retrieve seed status." });
+    }
+  });
+
   // Endpoint to verify admin credentials securely on server side
   app.post("/api/admin/auth/verify", async (req: Request, res: Response) => {
     try {
@@ -932,6 +1005,21 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
   // Admin User Directory listing
   app.get("/api/admin/users", async (_req: Request, res: Response) => {
     try {
+      const seeded = getSeededUsers();
+      for (const s of seeded) {
+        if (!serverManagedUsers.some((u) => u.uid === s.uid || u.email === s.email)) {
+          serverManagedUsers.unshift({
+            uid: s.uid,
+            email: s.email,
+            displayName: s.displayName,
+            photoURL: null,
+            role: s.role,
+            status: s.status,
+            createdAt: s.createdAt,
+            lastLoginAt: s.lastLoginAt,
+          });
+        }
+      }
       res.json(serverManagedUsers);
     } catch (error: any) {
       console.error("[API Error] /api/admin/users:", error);

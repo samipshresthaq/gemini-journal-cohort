@@ -89,7 +89,7 @@ export const WeeklyDigestModal: React.FC<WeeklyDigestModalProps> = ({
       unsubSettings();
       unsubDigests();
     };
-  }, [isOpen, user, isGuest]);
+  }, [isOpen, user?.uid, isGuest]);
 
   // Handle subscription preference toggle
   const handleToggleSubscription = async () => {
