@@ -546,12 +546,27 @@ export async function setUserAccountStatus(
   if (!adminUser || !adminUser.uid) {
     throw new Error("Administrative authorization required.");
   }
-  if (!targetUid) {
-    throw new Error("Target user ID is required.");
+
+  // Resolve targetUid if not provided or placeholder
+  let resolvedUid = targetUid;
+  if ((!resolvedUid || resolvedUid === "unknown") && targetEmail) {
+    try {
+      const q = query(collection(db, "users"), where("email", "==", targetEmail.toLowerCase()));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        resolvedUid = snap.docs[0].id;
+      }
+    } catch {
+      // Fallback if index/network is not available
+    }
+  }
+
+  if (!resolvedUid && !targetEmail) {
+    throw new Error("Target user ID or email is required.");
   }
 
   // Safety protection: Admin cannot deactivate their own current account
-  if (adminUser.uid === targetUid && newStatus === "deactivated") {
+  if (adminUser.uid === resolvedUid && newStatus === "deactivated") {
     throw new Error("Security Guard: You cannot deactivate your own active administrator account.");
   }
 
@@ -561,7 +576,7 @@ export async function setUserAccountStatus(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        targetUid,
+        targetUid: resolvedUid || "unknown",
         targetEmail,
         newStatus,
         reason,
@@ -573,9 +588,9 @@ export async function setUserAccountStatus(
   }
 
   // If Firebase Auth is authenticated, update Firestore
-  if (auth.currentUser) {
+  if (auth.currentUser && resolvedUid && resolvedUid !== "unknown") {
     try {
-      const userRef = doc(db, "users", targetUid);
+      const userRef = doc(db, "users", resolvedUid);
       const updatePayload: Partial<UserProfile> = {
         status: newStatus,
       };
@@ -596,7 +611,7 @@ export async function setUserAccountStatus(
       await logAdminAuditAction({
         adminUid: adminUser.uid,
         adminEmail: adminUser.email || "admin",
-        targetUid,
+        targetUid: resolvedUid,
         targetEmail,
         action: newStatus === "active" ? "activate" : "deactivate",
         details: newStatus === "deactivated" ? (reason || "Account deactivated") : "Account reactivated to active status",
@@ -1678,14 +1693,15 @@ export async function updateAppealStatus(
     console.warn("[Admin API] Failed to update appeal on server:", netErr);
   }
 
-  // 3. If approved, reactivate the user in Firestore directly
-  if (newStatus === "approved" && appeal.userId) {
+  // 3. If approved, reactivate the user in Firestore & directory directly
+  if (newStatus === "approved" && (appeal.userId || appeal.userEmail)) {
     try {
       await setUserAccountStatus(
         adminUser,
-        appeal.userId,
+        appeal.userId || "unknown",
         appeal.userEmail,
-        "active"
+        "active",
+        "Account reactivated upon appeal approval"
       );
     } catch (actErr) {
       console.warn("Could not automatically reactivate user document:", actErr);

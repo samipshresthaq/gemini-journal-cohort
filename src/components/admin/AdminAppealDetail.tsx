@@ -7,7 +7,6 @@ import {
   Clock,
   UserCheck,
   Send,
-  Trash2,
   Eye,
   Mail,
   Check,
@@ -24,7 +23,6 @@ import { AuthUser, DeactivationAppeal, AppealStatus, UserProfile, AppealReply } 
 import {
   updateAppealStatus,
   replyToAppeal,
-  deleteAppeal,
   fetchAppealById,
 } from "../../lib/adminService";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -145,6 +143,18 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
       u.email.toLowerCase() === appeal.userEmail.toLowerCase()
   );
 
+  const [accountStatus, setAccountStatus] = useState<"active" | "deactivated">(
+    appeal.status === "approved" ? "active" : matchedUser?.status || "deactivated"
+  );
+
+  useEffect(() => {
+    if (appeal.status === "approved") {
+      setAccountStatus("active");
+    } else if (matchedUser?.status) {
+      setAccountStatus(matchedUser.status);
+    }
+  }, [appeal.status, matchedUser?.status]);
+
   const isPending = appeal.status === "pending";
   const isApproved = appeal.status === "approved";
   const isRejected = appeal.status === "rejected";
@@ -155,10 +165,22 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
     setIsProcessingAction(true);
     try {
       const note = "Appeal reviewed and approved. Account reactivated by administrator.";
-      await updateAppealStatus(currentUser, appeal, "approved", note);
+      
+      const targetUid =
+        appeal.userId && appeal.userId !== "unknown"
+          ? appeal.userId
+          : matchedUser?.uid || appeal.userId;
+
+      const appealToUpdate: DeactivationAppeal = {
+        ...appeal,
+        userId: targetUid,
+      };
+
+      await updateAppealStatus(currentUser, appealToUpdate, "approved", note);
       
       const updated: DeactivationAppeal = {
         ...appeal,
+        userId: targetUid,
         status: "approved",
         adminNotes: note,
         reviewedBy: currentUser.email || currentUser.displayName || "Admin",
@@ -166,11 +188,15 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
         updatedAt: Date.now(),
       };
       setAppeal(updated);
+      setAccountStatus("active");
+      if (matchedUser) {
+        matchedUser.status = "active";
+      }
       onAppealUpdated?.(updated);
 
       showToast(
         "success",
-        `Account reactivated! A reactivation confirmation email has been dispatched to ${appeal.userEmail}.`
+        "Appeal approved! Account has been reactivated successfully."
       );
     } catch (err: any) {
       showToast("error", err?.message || "Failed to approve appeal and reactivate user.");
@@ -198,7 +224,7 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
       onAppealUpdated?.(updated);
       setShowRejectModal(false);
 
-      showToast("success", `Appeal marked as rejected.`);
+      showToast("success", "Appeal rejected. The account remains deactivated.");
     } catch (err: any) {
       showToast("error", err?.message || "Failed to reject appeal.");
     } finally {
@@ -224,27 +250,10 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
       setAppeal(updated);
       onAppealUpdated?.(updated);
 
-      showToast("success", `Appeal marked as under review.`);
+      showToast("success", "Appeal marked as reviewed.");
     } catch (err: any) {
-      showToast("error", err?.message || "Failed to update appeal status.");
+      showToast("error", err?.message || "Failed to mark appeal as reviewed.");
     } finally {
-      setIsProcessingAction(false);
-    }
-  };
-
-  // Action: Delete Appeal
-  const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this appeal record? This action cannot be undone.")) {
-      return;
-    }
-    setIsProcessingAction(true);
-    try {
-      await deleteAppeal(appeal.id);
-      showToast("success", "Appeal record permanently deleted.");
-      onAppealDeleted?.(appeal.id);
-      onBackToList();
-    } catch (err: any) {
-      showToast("error", err?.message || "Failed to delete appeal.");
       setIsProcessingAction(false);
     }
   };
@@ -414,11 +423,11 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             <div className="flex items-center gap-2">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  matchedUser?.status === "active" ? "bg-emerald-500" : "bg-rose-500"
+                  accountStatus === "active" ? "bg-emerald-500" : "bg-rose-500"
                 }`}
               />
               <span className="font-bold text-slate-900 dark:text-white capitalize">
-                {matchedUser?.status || (isApproved ? "active" : "deactivated")}
+                {accountStatus}
               </span>
             </div>
           </div>
@@ -657,17 +666,27 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             <div className="space-y-2 pt-2">
               <button
                 id="btn-detail-approve-reactivate"
-                disabled={isProcessingAction}
+                disabled={isProcessingAction || isApproved}
                 onClick={handleApproveAndReactivate}
-                className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black tracking-wide shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full py-3 px-4 rounded-2xl text-xs font-black tracking-wide shadow-2xs transition-all flex items-center justify-center gap-2 ${
+                  isApproved
+                    ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 cursor-not-allowed opacity-90"
+                    : "bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white cursor-pointer hover:shadow"
+                }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>
-                  {isProcessingAction ? "Processing Reactivation..." : "Approve & Reactivate Account"}
+                  {isProcessingAction && !isApproved
+                    ? "Processing Reactivation..."
+                    : isApproved
+                    ? "Approved"
+                    : "Approve & Reactivate Account"}
                 </span>
               </button>
               <span className="text-[11px] text-slate-400 text-center block">
-                Restores login access & dispatches reactivation email to user.
+                {isApproved
+                  ? "Account has been reactivated & restored to active directory."
+                  : "Restores login access & dispatches reactivation email to user."}
               </span>
             </div>
 
@@ -675,34 +694,38 @@ export const AdminAppealDetail: React.FC<AdminAppealDetailProps> = ({
             <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
                 id="btn-detail-reject-appeal"
-                disabled={isProcessingAction}
+                disabled={isProcessingAction || isRejected}
                 onClick={() => setShowRejectModal(true)}
-                className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/70 text-rose-700 dark:text-rose-300 text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                  isRejected
+                    ? "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 cursor-not-allowed opacity-90"
+                    : "bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/70 text-rose-700 dark:text-rose-300 cursor-pointer disabled:opacity-50"
+                }`}
               >
                 <XCircle className="w-4 h-4" />
-                <span>Reject Appeal</span>
+                <span>{isRejected ? "Rejected" : "Reject Appeal"}</span>
               </button>
 
               <button
                 id="btn-detail-mark-reviewed"
-                disabled={isProcessingAction}
+                disabled={isProcessingAction || isReviewed || isApproved || isRejected}
                 onClick={handleMarkReviewed}
-                className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                  isReviewed
+                    ? "bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 cursor-not-allowed opacity-90"
+                    : (isApproved || isRejected)
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-50"
+                    : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer disabled:opacity-50"
+                }`}
               >
                 <Eye className="w-4 h-4" />
-                <span>Mark as Reviewed</span>
-              </button>
-            </div>
-
-            {/* Delete Appeal */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button
-                onClick={handleDelete}
-                disabled={isProcessingAction}
-                className="w-full py-2 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Appeal Record</span>
+                <span>
+                  {isProcessingAction && !isReviewed && !isApproved && !isRejected
+                    ? "Updating..."
+                    : isReviewed
+                    ? "Reviewed"
+                    : "Mark as Reviewed"}
+                </span>
               </button>
             </div>
           </div>

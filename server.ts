@@ -1121,8 +1121,8 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const { targetUid, targetEmail, targetName, newStatus, reason, adminEmail } = body;
 
-      if (!targetUid || !newStatus) {
-        res.status(400).json({ error: "Target UID and newStatus are required." });
+      if ((!targetUid && !targetEmail) || !newStatus) {
+        res.status(400).json({ error: "Target UID or email and newStatus are required." });
         return;
       }
 
@@ -1130,7 +1130,11 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
       const adminContactEmail = adminCreds.adminEmail || adminEmail || "";
 
       let userRecord = null;
-      const userIndex = serverManagedUsers.findIndex((u) => u.uid === targetUid);
+      const userIndex = serverManagedUsers.findIndex(
+        (u) =>
+          (targetUid && targetUid !== "unknown" && u.uid === targetUid) ||
+          (targetEmail && u.email && u.email.toLowerCase() === targetEmail.toLowerCase())
+      );
       if (userIndex >= 0) {
         serverManagedUsers[userIndex] = {
           ...serverManagedUsers[userIndex],
