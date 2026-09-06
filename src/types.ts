@@ -85,6 +85,7 @@ export interface RecentGeminiLog {
   costUsd: number;
   latencyMs: number;
   status: 'success' | 'error';
+  isLive?: boolean;
 }
 
 export interface AdminAnalyticsData {
@@ -102,6 +103,10 @@ export interface AdminAnalyticsData {
   modelBreakdown: ModelUsageBreakdown[];
   featureBreakdown: FeatureUsageBreakdown[];
   recentLogs: RecentGeminiLog[];
+  isAiDataSimulated?: boolean;
+  realAiRequestsCount?: number;
+  isSignupsSimulated?: boolean;
+  realUsersCount?: number;
 }
 
 export interface JournalMessage {

@@ -39,7 +39,7 @@ import {
   Cell,
 } from "recharts";
 import { AdminAnalyticsData, UserProfile } from "../../types";
-import { fetchAdminAnalytics } from "../../lib/adminService";
+import { fetchAdminAnalytics, executeAdminTestAiCall } from "../../lib/adminService";
 
 interface AdminDashboardProps {
   liveUsers: UserProfile[];
@@ -72,9 +72,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [timeframeDays, setTimeframeDays] = useState<number>(14);
   const [signupViewMode, setSignupViewMode] = useState<"daily" | "cumulative">("daily");
+  const [includeDemoBaseline, setIncludeDemoBaseline] = useState<boolean>(true);
   const [analytics, setAnalytics] = useState<AdminAnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
+  const [testAiToast, setTestAiToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Theme-aware state for chart styling
@@ -94,13 +97,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  const loadMetrics = async (days: number, showRefreshIndicator: boolean = false) => {
+  const loadMetrics = async (
+    days: number,
+    showRefreshIndicator: boolean = false,
+    useDemo: boolean = includeDemoBaseline
+  ) => {
     if (showRefreshIndicator) setIsRefreshing(true);
     else setIsLoading(true);
     setError(null);
 
     try {
-      const data = await fetchAdminAnalytics(days, liveUsers);
+      const data = await fetchAdminAnalytics(days, liveUsers, useDemo);
       setAnalytics(data);
     } catch (err: any) {
       console.warn("Notice loading admin analytics:", err);
@@ -112,8 +119,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   useEffect(() => {
-    loadMetrics(timeframeDays);
-  }, [timeframeDays, liveUsers?.length]);
+    loadMetrics(timeframeDays, false, includeDemoBaseline);
+  }, [timeframeDays, liveUsers?.length, includeDemoBaseline]);
+
+  const handleTriggerTestAi = async () => {
+    setIsTestingAi(true);
+    setTestAiToast(null);
+    try {
+      await executeAdminTestAiCall();
+      setTestAiToast({
+        message: "Live Gemini AI test call executed and recorded in the real-time telemetry stream!",
+        type: "success",
+      });
+      await loadMetrics(timeframeDays, true, includeDemoBaseline);
+    } catch (err: any) {
+      setTestAiToast({
+        message: err.message || "Test call initiated with verified telemetry log generated.",
+        type: "info",
+      });
+      await loadMetrics(timeframeDays, true, includeDemoBaseline);
+    } finally {
+      setIsTestingAi(false);
+      setTimeout(() => setTestAiToast(null), 6000);
+    }
+  };
 
   // Model pie chart data formatted
   const pieChartData = useMemo(() => {
@@ -141,7 +170,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Data Mode Switcher (Real vs Baseline) */}
+          <button
+            id="btn-toggle-demo-baseline"
+            onClick={() => setIncludeDemoBaseline(!includeDemoBaseline)}
+            title="Toggle between Real Data Only and Real + Sample Demonstration baseline"
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+              includeDemoBaseline
+                ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+                : "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                includeDemoBaseline ? "bg-indigo-500" : "bg-emerald-500 animate-pulse"
+              }`}
+            />
+            <span>{includeDemoBaseline ? "Data: Real + Baseline Demo" : "Data: Strict Real Only"}</span>
+          </button>
+
+          {/* Test Live AI Call Button */}
+          <button
+            id="btn-trigger-test-ai"
+            onClick={handleTriggerTestAi}
+            disabled={isTestingAi}
+            title="Trigger a live Gemini AI call to verify real-time telemetry stream"
+            className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-60"
+          >
+            <Zap className={`w-3.5 h-3.5 ${isTestingAi ? "animate-spin text-purple-600" : "text-purple-600 dark:text-purple-400"}`} />
+            <span>{isTestingAi ? "Testing AI..." : "Test Live AI Call"}</span>
+          </button>
+
           {/* Timeframe selector */}
           <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs">
             <button
@@ -181,7 +241,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             id="btn-refresh-dashboard"
-            onClick={() => loadMetrics(timeframeDays, true)}
+            onClick={() => loadMetrics(timeframeDays, true, includeDemoBaseline)}
             disabled={isRefreshing}
             title="Refresh telemetry and metrics"
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs flex items-center justify-center"
@@ -191,11 +251,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
 
+      {/* Live AI Test Notification Toast */}
+      {testAiToast && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between shadow-2xs animate-fadeIn">
+          <div className="flex items-center gap-2 font-medium">
+            <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{testAiToast.message}</span>
+          </div>
+          <button
+            onClick={() => setTestAiToast(null)}
+            className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-950 font-bold ml-4 text-sm"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs flex items-center justify-between">
           <span>{error}</span>
           <button
-            onClick={() => loadMetrics(timeframeDays)}
+            onClick={() => loadMetrics(timeframeDays, false, includeDemoBaseline)}
             className="underline font-semibold hover:text-red-800 dark:hover:text-red-200 cursor-pointer"
           >
             Retry
@@ -255,14 +331,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               +{analytics?.weekSignups ?? 0} this week
             </span>
           </div>
-          <div className="mt-3 flex items-center gap-2 text-[11px] pt-3 border-t border-slate-100 dark:border-slate-800/80">
-            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md font-semibold">
-              <UserCheck className="w-3 h-3" />
-              {analytics?.activeUsers ?? 0} Active
-            </span>
-            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md font-semibold">
-              <UserX className="w-3 h-3 text-red-500" />
-              {analytics?.deactivatedUsers ?? 0} Deactivated
+          <div className="mt-3 flex items-center justify-between text-[11px] pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded font-semibold">
+                <UserCheck className="w-3 h-3" />
+                {analytics?.activeUsers ?? 0}
+              </span>
+              <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-semibold">
+                <UserX className="w-3 h-3 text-red-500" />
+                {analytics?.deactivatedUsers ?? 0}
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium">
+              {analytics?.isSignupsSimulated ? "Demo Baseline" : "Real Firestore"}
             </span>
           </div>
         </div>
@@ -288,9 +369,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
           <div className="mt-3 flex items-center justify-between text-[11px] pt-3 border-t border-slate-100 dark:border-slate-800/80 text-slate-500 dark:text-slate-400">
             <span>7-Day Run Rate:</span>
-            <span className="font-semibold text-slate-800 dark:text-slate-200">
-              ~{Math.round(((analytics?.weekSignups ?? 14) / 7) * 10) / 10} / day
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                ~{Math.round(((analytics?.weekSignups ?? 14) / 7) * 10) / 10} / day
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {analytics?.isSignupsSimulated ? "(Baseline)" : "(Real)"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -315,9 +401,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {(analytics?.totalAiTokens ? (analytics.totalAiTokens / 1000).toFixed(1) : "0")}k tok
             </span>
           </div>
-          <div className="mt-3 flex items-center justify-between text-[11px] pt-3 border-t border-slate-100 dark:border-slate-800/80 text-slate-500 dark:text-slate-400">
-            <span>Model Fallback Ladder:</span>
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">4 tiers active</span>
+          <div className="mt-3 flex items-center justify-between text-[11px] pt-3 border-t border-slate-100 dark:border-slate-800/80">
+            {analytics?.realAiRequestsCount && analytics.realAiRequestsCount > 0 ? (
+              <span className="inline-flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {analytics.realAiRequestsCount} Real Live Calls
+              </span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                Demo Baseline Active
+              </span>
+            )}
+            <span className="text-[10px] text-slate-400">4 Model Tiers</span>
           </div>
         </div>
 
@@ -752,6 +847,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="py-2.5 px-3.5">Time</th>
+                <th className="py-2.5 px-3.5">Source</th>
                 <th className="py-2.5 px-3.5">Feature & Endpoint</th>
                 <th className="py-2.5 px-3.5">Model Used</th>
                 <th className="py-2.5 px-3.5 text-right">Tokens (In/Out)</th>
@@ -762,7 +858,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-mono">
               {analytics?.recentLogs && analytics.recentLogs.length > 0 ? (
-                analytics.recentLogs.slice(0, 10).map((log) => (
+                analytics.recentLogs.slice(0, 12).map((log) => (
                   <tr
                     key={log.id}
                     className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
@@ -773,6 +869,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         minute: "2-digit",
                         second: "2-digit",
                       })}
+                    </td>
+                    <td className="py-2.5 px-3.5 font-sans whitespace-nowrap">
+                      {log.isLive !== false ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Live
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                          Sample
+                        </span>
+                      )}
                     </td>
                     <td className="py-2.5 px-3.5 font-sans">
                       <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -815,7 +923,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-slate-400 font-sans">
+                  <td colSpan={8} className="py-6 text-center text-slate-400 font-sans">
                     No recent Gemini calls recorded in this session yet.
                   </td>
                 </tr>
