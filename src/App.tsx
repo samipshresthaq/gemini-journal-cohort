@@ -465,17 +465,18 @@ export default function App() {
     try {
       localStorage.removeItem(GUEST_SESSION_KEY);
       await signOutUser();
-      setUser(null);
-      setActiveEntry(null);
-      setEntries([]);
-      setIsProfileOpen(false);
     } catch (err) {
       console.error("Sign out error:", err);
       localStorage.removeItem(GUEST_SESSION_KEY);
+    } finally {
       setUser(null);
+      setUserProfile(null);
+      setStreak(null);
       setActiveEntry(null);
       setEntries([]);
       setIsProfileOpen(false);
+      setIsHistoryOpen(false);
+      setIsAuthModalOpen(false);
     }
   };
 
@@ -1021,6 +1022,7 @@ export default function App() {
             totalGuestEntries={entries.length}
             maxGuestConversationsPerEntry={MAX_GUEST_CONVERSATIONS_PER_ENTRY}
             onNewEntry={handleNewEntry}
+            onExitGuest={handleSignOut}
           />
         ) : (
           <div className="text-center py-24 space-y-4">

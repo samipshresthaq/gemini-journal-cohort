@@ -118,7 +118,9 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
       user.uid,
       user.email || "",
       (currentAppeal) => {
+        if(profile?.deactivatedAt < currentAppeal?.createdAt) {
         setAppeal(currentAppeal);
+        }
         setIsLoadingAppeal(false);
       },
       (err) => {
@@ -1144,27 +1146,6 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
                       Submit an appeal for account review stored in Firestore and delivered to admin.
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  id="btn-deactivated-view-history-card"
-                  type="button"
-                  onClick={handleOpenConversationHistory}
-                  className="p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/40 text-left transition-all group flex flex-col justify-between cursor-pointer"
-                >
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                        <History className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                        View History
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
-                      Directly view your past reflection conversations and Gemini chat transcripts.
                     </p>
                   </div>
                 </button>

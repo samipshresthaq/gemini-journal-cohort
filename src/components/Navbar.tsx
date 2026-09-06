@@ -18,7 +18,8 @@ import {
   LogIn,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft
 } from "lucide-react";
 
 interface NavbarProps {
@@ -250,7 +251,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </>
             )}
-
+            {isGuest && onSignOut && (
+              <button
+                id="btn-nav-guest-back"
+                type="button"
+                onClick={onSignOut}
+                title="Exit guest mode and return to the landing page"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold transition-colors cursor-pointer shadow-xs shrink-0"
+              >
+                <span className="hidden sm:inline">Exit</span>
+              </button>
+            )}
             {/* Theme Toggle (Light / Dark Mode) */}
             {onToggleTheme && (
               <button
@@ -464,6 +475,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <LogIn className="w-3.5 h-3.5" />
                       <span>Sign In for Full Cloud Access</span>
                     </button>
+                    {isGuest && (
+                      <button
+                        id="btn-mobile-drawer-exit-guest"
+                        type="button"
+                        onClick={() => handleMobileAction(onSignOut)}
+                        className="w-full py-2 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-700"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to Landing Page</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -690,17 +712,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>Sign Out</span>
                 </button>
               ) : (
-                <button
-                  id="btn-mobile-nav-sign-in"
-                  onClick={() => handleMobileAction(() => onOpenAuthModal?.(
-                    "Sign In to Your Active Account",
-                    "Sign in to unlock reflection sessions, weekly digests, past entries, and Cloud Firestore synchronization."
-                  ))}
-                  className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span>Sign In</span>
-                </button>
+                <div className="space-y-2">
+                  {isGuest && (
+                    <button
+                      id="btn-mobile-nav-exit-guest"
+                      type="button"
+                      onClick={() => handleMobileAction(onSignOut)}
+                      className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back to Landing Page</span>
+                    </button>
+                  )}
+                  <button
+                    id="btn-mobile-nav-sign-in"
+                    onClick={() => handleMobileAction(() => onOpenAuthModal?.(
+                      "Sign In to Your Active Account",
+                      "Sign in to unlock reflection sessions, weekly digests, past entries, and Cloud Firestore synchronization."
+                    ))}
+                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>Sign In</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
