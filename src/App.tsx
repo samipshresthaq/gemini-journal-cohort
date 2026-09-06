@@ -1023,6 +1023,7 @@ export default function App() {
             maxGuestConversationsPerEntry={MAX_GUEST_CONVERSATIONS_PER_ENTRY}
             onNewEntry={handleNewEntry}
             onExitGuest={handleSignOut}
+            onToggleHistory={() => setIsHistoryOpen((prev) => !prev)}
           />
         ) : (
           <div className="text-center py-24 space-y-4">

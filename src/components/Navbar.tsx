@@ -206,50 +206,54 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </span>
                   </button>
                 )}
-
-                {/* Past Entries Feature Button */}
-                <button
-                  id="btn-nav-history"
-                  onClick={onToggleHistory}
-                  title="View Past Journal Entries"
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isHistoryOpen
-                      ? "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-xs"
-                      : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-                  }`}
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span>Past Entries</span>
-                </button>
-
-                {/* New Entry Feature Button */}
-                <button
-                  id="btn-nav-new-entry"
-                  onClick={onNewEntry}
-                  title="Start a New Reflection"
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white hover:shadow cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>New Entry</span>
-                </button>
-
-                {/* Guide / Walkthrough */}
-                {showTestGuide && (
-                  <button
-                    id="btn-nav-walkthrough-guide"
-                    onClick={onToggleWalkthrough}
-                    title="Test Walkthrough & Verification"
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                      isWalkthroughOpen
-                        ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 shadow-xs"
-                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                    <span className="hidden lg:inline">Test Guide</span>
-                  </button>
-                )}
               </>
+            )}
+
+            {/* Past Entries Feature Button (Enabled for active accounts and guest users) */}
+            {(hasActiveAccount || isGuest) && (
+              <button
+                id="btn-nav-history"
+                onClick={onToggleHistory}
+                title="View Past Journal Entries"
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isHistoryOpen
+                    ? "bg-slate-900 dark:bg-indigo-600 text-white border-slate-900 dark:border-indigo-600 shadow-xs"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Past Entries</span>
+              </button>
+            )}
+
+            {/* New Entry Feature Button (Enabled for active accounts and guest users) */}
+            {(hasActiveAccount || isGuest) && (
+              <button
+                id="btn-nav-new-entry"
+                onClick={onNewEntry}
+                title="Start a New Reflection"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white hover:shadow cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Entry</span>
+              </button>
+            )}
+
+            {/* Guide / Walkthrough */}
+            {hasActiveAccount && showTestGuide && (
+              <button
+                id="btn-nav-walkthrough-guide"
+                onClick={onToggleWalkthrough}
+                title="Test Walkthrough & Verification"
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isWalkthroughOpen
+                    ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 shadow-xs"
+                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                }`}
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span className="hidden lg:inline">Test Guide</span>
+              </button>
             )}
             {isGuest && onSignOut && (
               <button

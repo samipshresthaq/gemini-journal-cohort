@@ -36,7 +36,8 @@ import {
   PlusCircle,
   UploadCloud,
   FileCheck,
-  Flame
+  Flame,
+  History
 } from "lucide-react";
 
 interface JournalEditorProps {
@@ -59,6 +60,7 @@ interface JournalEditorProps {
   maxGuestConversationsPerEntry?: number;
   onNewEntry?: () => void;
   onExitGuest?: () => void;
+  onToggleHistory?: () => void;
 }
 
 const MOODS = [
@@ -101,6 +103,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   maxGuestConversationsPerEntry = 2,
   onNewEntry,
   onExitGuest,
+  onToggleHistory,
 }) => {
   const [inputText, setInputText] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -479,6 +482,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
+              </button>
+            )}
+            {onToggleHistory && (
+              <button
+                type="button"
+                id="btn-guest-banner-history"
+                onClick={onToggleHistory}
+                title="View past reflection entries in this guest session"
+                className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-700 transition-colors cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+              >
+                <History className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
+                <span>Past Entries</span>
               </button>
             )}
             {isEntryConversationLimitReached && totalGuestEntries < maxGuestEntries && onNewEntry && (
