@@ -94,14 +94,31 @@ export async function seedAdminUser(options?: SeedUserOptions): Promise<SeedUser
   const timestamp = Date.now();
   console.log("[Seed Utility] Starting user seeding process...");
 
-  // 1. Resolve Admin configuration from parameters, Secret Manager, or environment variables
+  // 1. Resolve sensitive Admin configuration from parameters, Secret Manager, or .env environment variables
   const creds = await getAdminCredentials();
-  const targetEmail = (options?.email || creds.adminEmail || process.env.ADMIN_EMAIL || "admin@geminijournal.internal").toLowerCase().trim();
-  const targetPassword = options?.password || creds.adminPassword || process.env.ADMIN_PASSWORD || "n0P@ssword";
+  const targetEmail = (
+    options?.email ||
+    creds.adminEmail ||
+    process.env.ADMIN_EMAIL
+  ).toLowerCase().trim();
+  const targetPassword =
+    options?.password ||
+    creds.adminPassword ||
+    process.env.ADMIN_PASSWORD;
+
+  if (!targetEmail || !targetPassword) {
+    const missing: string[] = [];
+    if (!targetEmail) missing.push("email (ADMIN_EMAIL)");
+    if (!targetPassword) missing.push("password (ADMIN_PASSWORD)");
+    const errMsg = `Cannot seed admin user: Sensitive ${missing.join(" and ")} not configured. Please configure ADMIN_EMAIL and ADMIN_PASSWORD in Google Cloud Secret Manager or your .env file.`;
+    console.error(`[Seed Utility] ❌ ${errMsg}`);
+    throw new Error(errMsg);
+  }
+
   const targetDisplayName = options?.displayName || "System Administrator";
   const targetRole = options?.role || "admin";
   const targetStatus = options?.status || "active";
-  const targetUid = options?.uid || "admin_default_master";
+  const targetUid = options?.uid || `admin_${targetEmail.replace(/[^a-zA-Z0-9]/g, "_")}` || "admin_default_master";
 
   let action: "created" | "updated" | "verified" = "created";
   let authSynced = false;

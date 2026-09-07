@@ -1571,6 +1571,130 @@ export async function fetchUserAppeal(userId: string, userEmail?: string): Promi
 }
 
 /**
+ * Fetch all appeals submitted by a specific user, sorted from newest to oldest
+ */
+export async function fetchUserAppealsHistory(
+  userId: string,
+  userEmail?: string
+): Promise<DeactivationAppeal[]> {
+  const appealsMap = new Map<string, DeactivationAppeal>();
+
+  // 1. Try Firestore with where("userId", "==", userId)
+  try {
+    const appealsCol = collection(db, "appeals");
+    if (userId) {
+      const q = query(appealsCol, where("userId", "==", userId));
+      const snap = await getDocs(q);
+      snap.docs.forEach((d) => {
+        appealsMap.set(d.id, { ...d.data(), id: d.id } as DeactivationAppeal);
+      });
+    }
+    if (userEmail) {
+      const qEmail = query(appealsCol, where("userEmail", "==", userEmail));
+      const snapEmail = await getDocs(qEmail);
+      snapEmail.docs.forEach((d) => {
+        appealsMap.set(d.id, { ...d.data(), id: d.id } as DeactivationAppeal);
+      });
+    }
+  } catch (err) {
+    console.warn("[Firestore] Could not query user appeals history:", err);
+  }
+
+  // 2. Fetch from backend /api/admin/appeals
+  try {
+    const serverAppeals = await fetchAppealsFromBackend();
+    const matched = serverAppeals.filter(
+      (a) =>
+        (userId && a.userId === userId) ||
+        (userEmail && a.userEmail?.toLowerCase().trim() === userEmail.toLowerCase().trim())
+    );
+    for (const a of matched) {
+      const existing = appealsMap.get(a.id);
+      if (existing) {
+        const combinedReplies = [...(existing.replies || []), ...(a.replies || [])];
+        const uniqueMap = new Map<string, AppealReply>();
+        for (const r of combinedReplies) {
+          if (!r) continue;
+          const key = r.id || `${r.senderRole}_${r.sentAt}_${r.message?.slice(0, 20)}`;
+          uniqueMap.set(key, r);
+        }
+        appealsMap.set(a.id, {
+          ...existing,
+          ...a,
+          replies: Array.from(uniqueMap.values()).sort((x, y) => x.sentAt - y.sentAt),
+          updatedAt: Math.max(existing.updatedAt || 0, a.updatedAt || 0),
+        });
+      } else {
+        appealsMap.set(a.id, a);
+      }
+    }
+  } catch (backendErr) {
+    console.warn("[Backend] Could not query backend appeals history:", backendErr);
+  }
+
+  return Array.from(appealsMap.values()).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
+ * Real-time subscription to a user's full appeal history
+ */
+export function subscribeToUserAppealsHistory(
+  userId: string,
+  userEmail: string,
+  onUpdate: (appeals: DeactivationAppeal[]) => void,
+  onError?: (err: any) => void
+): Unsubscribe {
+  let isUnsubscribed = false;
+  let unsubscribeFirestore = () => {};
+
+  const fetchAndUpdate = async () => {
+    try {
+      const history = await fetchUserAppealsHistory(userId, userEmail);
+      if (!isUnsubscribed) {
+        onUpdate(history);
+      }
+    } catch (err) {
+      if (onError && !isUnsubscribed) onError(err);
+    }
+  };
+
+  fetchAndUpdate();
+
+  if (userId) {
+    try {
+      const appealsCol = collection(db, "appeals");
+      const q = query(appealsCol, where("userId", "==", userId));
+      unsubscribeFirestore = onSnapshot(
+        q,
+        async () => {
+          if (isUnsubscribed) return;
+          await fetchAndUpdate();
+        },
+        (err) => {
+          console.warn("[Firestore] User appeal history stream notice:", err?.message);
+          if (onError) onError(err);
+          fetchAndUpdate();
+        }
+      );
+    } catch (err) {
+      console.warn("[Firestore] Could not attach user appeal history snapshot:", err);
+    }
+  }
+
+  const pollInterval = setInterval(() => {
+    if (!isUnsubscribed) {
+      fetchAndUpdate();
+    }
+  }, 3500);
+
+  return () => {
+    isUnsubscribed = true;
+    clearInterval(pollInterval);
+    unsubscribeFirestore();
+  };
+}
+
+/**
  * Real-time subscription to a user's appeal in Firestore + background polling fallback
  * Ensures that admin replies are immediately received by deactivated users.
  */
