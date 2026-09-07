@@ -36,12 +36,16 @@ export const DeactivatedAccountModal: React.FC<DeactivatedAccountModalProps> = (
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [adminEmail, setAdminEmail] = useState<string>("");
+  const [supportEmail, setSupportEmail] = useState<string>("");
 
-  // Fetch administrator contact email
+  // Fetch administrator and support contact email
   React.useEffect(() => {
     fetch("/api/admin/info")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (data?.supportEmail) {
+          setSupportEmail(data.supportEmail);
+        }
         if (data?.adminEmail) {
           setAdminEmail(data.adminEmail);
         }
@@ -50,6 +54,8 @@ export const DeactivatedAccountModal: React.FC<DeactivatedAccountModalProps> = (
   }, []);
 
   if (!isOpen) return null;
+
+  const contactEmail = supportEmail || adminEmail;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,19 +80,19 @@ export const DeactivatedAccountModal: React.FC<DeactivatedAccountModalProps> = (
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || "Failed to deliver contact request to the administrator.");
+        throw new Error(data.error || "Failed to deliver contact request to support.");
       }
 
       setIsSubmitted(true);
     } catch (err: any) {
-      console.error("Failed to contact admin:", err);
+      console.error("Failed to contact support:", err);
       setErrorMessage(err.message || "Failed to deliver message. Please try again.");
     } finally {
       setIsSending(false);
     }
   };
 
-  const mailtoLink = `mailto:${encodeURIComponent(adminEmail)}?subject=${encodeURIComponent(
+  const mailtoLink = `mailto:${encodeURIComponent(contactEmail)}?subject=${encodeURIComponent(
     subject
   )}&body=${encodeURIComponent(
     `User Email: ${user.email || user.uid}\nReason: ${profile?.deactivationReason || "None specified"}\n\n${message}`
@@ -155,10 +161,10 @@ export const DeactivatedAccountModal: React.FC<DeactivatedAccountModalProps> = (
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
-                  Request Dispatched to Administrator
+                  Request Dispatched to Support
                 </h4>
                 <p className="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed max-w-sm mx-auto">
-                  Your reactivation appeal has been sent directly to the administrator (<strong className="underline">{adminEmail}</strong>). You will receive an email notification when your account status is updated.
+                  Your reactivation appeal has been sent directly to support (<strong className="underline">{contactEmail || "our team"}</strong>). You will receive an email notification when your account status is updated.
                 </p>
               </div>
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
@@ -185,11 +191,13 @@ export const DeactivatedAccountModal: React.FC<DeactivatedAccountModalProps> = (
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Contact Administrator for Reactivation</span>
+                    <span>Contact Support for Reactivation</span>
                   </label>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    To: {adminEmail}
-                  </span>
+                  {contactEmail && (
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      To: {contactEmail}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
                   Submit an appeal to request immediate review and reactivation of your journal entries.

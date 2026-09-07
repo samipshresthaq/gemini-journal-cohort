@@ -27,6 +27,7 @@ export interface AccountStatusEmailParams {
   status: "active" | "deactivated";
   reason?: string;
   adminContactEmail?: string;
+  supportEmail?: string;
   appUrl?: string;
 }
 
@@ -49,6 +50,7 @@ export interface AdminAppealReplyEmailParams {
   adminReply: string;
   adminName?: string;
   adminEmail?: string;
+  supportEmail?: string;
   appUrl?: string;
 }
 
@@ -245,15 +247,16 @@ export function generateWeeklyDigestHtml(params: WeeklyDigestEmailParams): strin
  * Account Status Change HTML & Text Template (Activated or Deactivated)
  */
 export function generateAccountStatusEmail(params: AccountStatusEmailParams): EmailRenderOutput {
-  const { userName, userEmail, status, reason, adminContactEmail } = params;
+  const { userName, userEmail, status, reason, adminContactEmail, supportEmail } = params;
   const isActivated = status === "active";
   const appUrl = params.appUrl || process.env.APP_URL || "https://ais-dev-cfsy4zwhedzflleyrowgf4-896719886324.asia-east1.run.app";
   const adminEmail = adminContactEmail || process.env.ADMIN_EMAIL || "";
+  const contactEmail = (supportEmail || process.env.SUPPORT_EMAIL || adminEmail || "").trim();
 
   const safeUserName = escapeHtml(userName || "Journal Writer");
   const safeUserEmail = escapeHtml(userEmail);
   const safeReason = escapeHtml(reason || (isActivated ? "Account status refreshed by administrator." : "Administrative security review or maintenance."));
-  const safeAdminEmail = escapeHtml(adminEmail);
+  const safeContactEmail = escapeHtml(contactEmail || adminEmail);
 
   const subject = isActivated
     ? "✓ Your Gemini Reflection Journal Account Has Been Reactivated"
@@ -343,15 +346,15 @@ export function generateAccountStatusEmail(params: AccountStatusEmailParams): Em
               </p>
 
               <div style="text-align:center;padding:10px 0 20px 0;">
-                <a href="mailto:${safeAdminEmail}?subject=${encodeURIComponent("Account Reactivation Request: " + userEmail)}&body=${encodeURIComponent("Hello Admin,\n\nI would like to request reactivation for my account (" + userEmail + ").\n\nThank you.")}" style="display:inline-block;background-color:#E11D48;color:#FFFFFF;text-decoration:none;padding:13px 32px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 4px 14px rgba(225,29,72,0.3);">
-                  Contact Admin for Review
+                <a href="mailto:${safeContactEmail}?subject=${encodeURIComponent("Account Reactivation Request: " + userEmail)}&body=${encodeURIComponent("Hello Support,\n\nI would like to request reactivation for my account (" + userEmail + ").\n\nThank you.")}" style="display:inline-block;background-color:#E11D48;color:#FFFFFF;text-decoration:none;padding:13px 32px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 4px 14px rgba(225,29,72,0.3);">
+                  Contact Support for Review
                 </a>
               </div>
               `
               }
 
               <p style="font-size:13px;line-height:1.5;color:#94A3B8;margin-top:20px;border-top:1px solid #F1F5F9;padding-top:16px;">
-                If you believe this status update was made in error, you can reply directly to this notification or contact our support team at <a href="mailto:${safeAdminEmail}" style="color:#4F46E5;text-decoration:none;font-weight:600;">${safeAdminEmail}</a>.
+                If you believe this status update was made in error, you can reply directly to this notification or contact our support team at <a href="mailto:${safeContactEmail}" style="color:#4F46E5;text-decoration:none;font-weight:600;">${safeContactEmail}</a>.
               </p>
             </td>
           </tr>
@@ -378,7 +381,7 @@ export function generateAccountStatusEmail(params: AccountStatusEmailParams): Em
 
   const text = isActivated
     ? `Hello ${userName || "User"},\n\nYour Gemini Reflection Journal account (${userEmail}) has been reactivated by the administrator.\nYou can now log in at ${appUrl} to resume your reflections.\n\nBest regards,\nGemini Journal Team`
-    : `Hello ${userName || "User"},\n\nYour Gemini Reflection Journal account (${userEmail}) has been deactivated.\nReason: ${reason || "Administrative review"}\n\nTo request reactivation, contact the administrator at ${adminEmail}.\n\nBest regards,\nGemini Journal Team`;
+    : `Hello ${userName || "User"},\n\nYour Gemini Reflection Journal account (${userEmail}) has been deactivated.\nReason: ${reason || "Administrative review"}\n\nTo request reactivation, contact support at ${contactEmail || adminEmail}.\n\nBest regards,\nGemini Journal Team`;
 
   return { subject, html, text };
 }
@@ -452,13 +455,15 @@ export function generateAdminAppealReplyEmail(params: AdminAppealReplyEmailParam
     adminReply,
     adminName,
     adminEmail,
+    supportEmail,
   } = params;
 
   const appUrl = params.appUrl || process.env.APP_URL || "https://ais-dev-cfsy4zwhedzflleyrowgf4-896719886324.asia-east1.run.app";
   const safeUserName = escapeHtml(userName || userEmail.split("@")[0] || "User");
   const safeUserEmail = escapeHtml(userEmail);
   const safeAdminName = escapeHtml(adminName || "System Administration");
-  const safeAdminEmail = escapeHtml(adminEmail || process.env.ADMIN_EMAIL || "");
+  const contactEmail = (supportEmail || process.env.SUPPORT_EMAIL || adminEmail || process.env.ADMIN_EMAIL || "").trim();
+  const safeContactEmail = escapeHtml(contactEmail);
   const safeSubject = escapeHtml(appealSubject || "Account Reactivation Request");
   const safeAdminReply = escapeHtml(adminReply);
   const safeOriginalMessage = originalAppealMessage ? escapeHtml(originalAppealMessage) : null;
@@ -537,7 +542,7 @@ ${safeAdminReply}
               </div>
 
               <p style="font-size:12px;line-height:1.6;color:#94A3B8;margin-top:20px;border-top:1px solid #F1F5F9;padding-top:16px;">
-                If you have further questions or additional documentation to submit, you can reply directly to this email or reach the administrator at <a href="mailto:${safeAdminEmail}" style="color:#4F46E5;text-decoration:none;font-weight:600;">${safeAdminEmail}</a>.
+                If you have further questions or additional documentation to submit, you can reply directly to this email or reach support at <a href="mailto:${safeContactEmail}" style="color:#4F46E5;text-decoration:none;font-weight:600;">${safeContactEmail}</a>.
               </p>
             </td>
           </tr>

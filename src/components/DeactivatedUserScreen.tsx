@@ -63,6 +63,7 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [adminEmail, setAdminEmail] = useState<string>("");
+  const [supportEmail, setSupportEmail] = useState<string>("");
 
   // Reflection conversations history
   const [userEntries, setUserEntries] = useState<JournalEntry[]>([]);
@@ -70,11 +71,14 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [historySearchQuery, setHistorySearchQuery] = useState("");
 
-  // Fetch administrator email from backend
+  // Fetch administrator and support email from backend
   useEffect(() => {
     fetch("/api/admin/info")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (data?.supportEmail) {
+          setSupportEmail(data.supportEmail);
+        }
         if (data?.adminEmail) {
           setAdminEmail(data.adminEmail);
         }
@@ -259,7 +263,8 @@ export const DeactivatedUserScreen: React.FC<DeactivatedUserScreenProps> = ({
     (deactivationTimestamp === 0 || (latestAppeal.reviewedAt && latestAppeal.reviewedAt > deactivationTimestamp))
   );
 
-  const mailtoLink = `mailto:${encodeURIComponent(adminEmail)}?subject=${encodeURIComponent(
+  const contactEmail = supportEmail || adminEmail;
+  const mailtoLink = `mailto:${encodeURIComponent(contactEmail)}?subject=${encodeURIComponent(
     subject
   )}&body=${encodeURIComponent(
     `User Email: ${user.email || user.uid}\nReason: ${profile?.deactivationReason || "None specified"}\n\n${message}`

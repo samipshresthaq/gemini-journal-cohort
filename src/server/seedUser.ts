@@ -96,15 +96,16 @@ export async function seedAdminUser(options?: SeedUserOptions): Promise<SeedUser
 
   // 1. Resolve sensitive Admin configuration from parameters, Secret Manager, or .env environment variables
   const creds = await getAdminCredentials();
-  const targetEmail = (
+  const rawEmail =
     options?.email ||
     creds.adminEmail ||
-    process.env.ADMIN_EMAIL
-  ).toLowerCase().trim();
+    process.env.ADMIN_EMAIL;
+  const targetEmail = rawEmail ? rawEmail.toLowerCase().trim() : "";
   const targetPassword =
     options?.password ||
     creds.adminPassword ||
-    process.env.ADMIN_PASSWORD;
+    process.env.ADMIN_PASSWORD ||
+    "";
 
   if (!targetEmail || !targetPassword) {
     const missing: string[] = [];

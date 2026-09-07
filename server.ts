@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 import nodemailer from "nodemailer";
 import cron from "node-cron";
-import { accessSecret, getAdminCredentials } from "./serverSecrets";
+import { accessSecret, getAdminCredentials, getSupportEmail } from "./serverSecrets";
 import { seedAdminUser, getSeededUsers } from "./src/server/seedUser";
 import {
   generateWeeklyDigestHtml,
@@ -76,15 +76,23 @@ async function sendSystemEmail(params: {
   subject: string;
   html: string;
   text?: string;
+  from?: string;
+  replyTo?: string;
 }): Promise<{ success: boolean; messageId?: string }> {
   try {
-    const { to, subject, html, text } = params;
+    const { to, subject, html, text, from, replyTo } = params;
+    const supportEmail = await getSupportEmail();
+    const defaultFrom =
+      process.env.SMTP_FROM ||
+      (supportEmail ? `"Gemini Reflection Journal Support" <${supportEmail}>` : '"Gemini Reflection Journal"');
+
     const mailOptions = {
-      from: process.env.SMTP_FROM || '"Gemini Reflection Journal"',
+      from: from || defaultFrom,
       to,
       subject,
       html,
       text: text || subject,
+      replyTo: replyTo || (supportEmail || undefined),
     };
 
     const info = await mailTransporter.sendMail(mailOptions);
@@ -852,8 +860,11 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
         }
       }
 
+      const supportEmail = await getSupportEmail();
+      const mailFrom = process.env.SMTP_FROM || (supportEmail ? `"Gemini Reflection Journal Support" <${supportEmail}>` : '"Gemini Reflection Journal"');
       const mailOptions = {
-        from: process.env.SMTP_FROM || '"Gemini Reflection Journal"',
+        from: mailFrom,
+        replyTo: supportEmail || undefined,
         to: userEmail,
         subject: `✨ Your Weekly Reflection Digest: ${digest.title || "Weekly Synthesis"}`,
         html: htmlContent,
@@ -1058,16 +1069,42 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
     }
   });
 
-  // Safe public endpoint providing administrator contact email for user appeals
+  // Safe public endpoint providing administrator and support contact email for user appeals
   app.get("/api/admin/info", async (_req: Request, res: Response) => {
     try {
-      const adminCreds = await getAdminCredentials();
+      const [adminCreds, supportEmail] = await Promise.all([
+        getAdminCredentials(),
+        getSupportEmail(),
+      ]);
       res.json({
+        adminEmail: adminCreds.adminEmail || "",
+        supportEmail: supportEmail || adminCreds.adminEmail || "",
+        appName: "Gemini Reflection Journal",
+      });
+    } catch (error: any) {
+      res.json({
+        adminEmail: "",
+        supportEmail: "",
+        appName: "Gemini Reflection Journal",
+      });
+    }
+  });
+
+  // Dedicated endpoint for support contact information
+  app.get("/api/support/info", async (_req: Request, res: Response) => {
+    try {
+      const [adminCreds, supportEmail] = await Promise.all([
+        getAdminCredentials(),
+        getSupportEmail(),
+      ]);
+      res.json({
+        supportEmail: supportEmail || adminCreds.adminEmail || "",
         adminEmail: adminCreds.adminEmail || "",
         appName: "Gemini Reflection Journal",
       });
     } catch (error: any) {
       res.json({
+        supportEmail: "",
         adminEmail: "",
         appName: "Gemini Reflection Journal",
       });
@@ -1126,8 +1163,12 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
         return;
       }
 
-      const adminCreds = await getAdminCredentials();
+      const [adminCreds, supportEmail] = await Promise.all([
+        getAdminCredentials(),
+        getSupportEmail(),
+      ]);
       const adminContactEmail = adminCreds.adminEmail || adminEmail || "";
+      const effectiveSupportEmail = supportEmail || adminContactEmail;
 
       let userRecord = null;
       const userIndex = serverManagedUsers.findIndex(
@@ -1157,6 +1198,7 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
           status: newStatus as "active" | "deactivated",
           reason: reason || userRecord?.deactivationReason,
           adminContactEmail,
+          supportEmail: effectiveSupportEmail,
         });
 
         // Fire-and-forget email dispatch so response remains instantaneous
@@ -1165,6 +1207,7 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
           subject: emailData.subject,
           html: emailData.html,
           text: emailData.text,
+          replyTo: effectiveSupportEmail || undefined,
         }).catch((e) => console.warn("[Status Email Notice]:", e.message));
       } else {
         console.log(`[Status Email Notice] Status updated for ${recipientEmail || targetUid} to ${newStatus}. Simulated email template generated.`);
@@ -1243,8 +1286,11 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
         serverAppeals.unshift(appealRecord);
       }
 
-      const adminCreds = await getAdminCredentials();
-      const adminEmail = adminCreds.adminEmail || "";
+      const [adminCreds, supportEmail] = await Promise.all([
+        getAdminCredentials(),
+        getSupportEmail(),
+      ]);
+      const targetDestinationEmail = supportEmail || adminCreds.adminEmail || "";
 
       const appealEmailData = generateReactivationAppealEmail({
         userName: userName || userEmail,
@@ -1255,9 +1301,10 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
         deactivationReason,
       });
 
-      if (adminEmail) {
+      if (targetDestinationEmail) {
         await sendSystemEmail({
-          to: adminEmail,
+          to: targetDestinationEmail,
+          replyTo: userEmail,
           subject: appealEmailData.subject,
           html: appealEmailData.html,
           text: appealEmailData.text,
@@ -1266,13 +1313,13 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
 
       res.json({
         success: true,
-        recipient: adminEmail,
+        recipient: targetDestinationEmail,
         appeal: appealRecord,
-        message: "Your appeal has been recorded and dispatched to the administrator.",
+        message: "Your support appeal has been recorded and dispatched to our support team.",
       });
     } catch (error: any) {
       console.error("[API Error] /api/support/contact-admin:", error);
-      res.status(500).json({ error: "Failed to send message to the administrator." });
+      res.status(500).json({ error: "Failed to send message to support." });
     }
   });
 
@@ -1308,26 +1355,30 @@ Generate a comprehensive, uplifting, and structured weekly summary in pure JSON 
         });
       }
 
-      // Notify administrator of user's follow-up message
-      const adminCreds = await getAdminCredentials();
-      const adminEmail = adminCreds.adminEmail || "";
+      // Notify support and administrator of user's follow-up message
+      const [adminCreds, supportEmail] = await Promise.all([
+        getAdminCredentials(),
+        getSupportEmail(),
+      ]);
+      const targetDestinationEmail = supportEmail || adminCreds.adminEmail || "";
 
       const senderName = userName || userEmail?.split("@")[0] || "User";
-      if (adminEmail) {
+      if (targetDestinationEmail) {
         sendSystemEmail({
-          to: adminEmail,
-          subject: `[Appeal Reply] ${senderName}: ${subject || "Account Reactivation Follow-up"}`,
+          to: targetDestinationEmail,
+          replyTo: userEmail,
+          subject: `[Support Case #${appealId.slice(-6)}] ${senderName}: ${subject || "Account Reactivation Follow-up"}`,
           html: `
             <div style="font-family: sans-serif; padding: 20px; color: #1e293b; max-width: 600px;">
-              <h2 style="color: #4f46e5; margin-bottom: 12px;">New User Reply on Appeal #${appealId}</h2>
-              <p style="font-size: 14px; margin-bottom: 16px;"><strong>${senderName}</strong> (<a href="mailto:${userEmail}">${userEmail}</a>) has sent a new follow-up message regarding their account deactivation appeal:</p>
+              <h2 style="color: #4f46e5; margin-bottom: 12px;">New User Reply on Support Case #${appealId}</h2>
+              <p style="font-size: 14px; margin-bottom: 16px;"><strong>${senderName}</strong> (<a href="mailto:${userEmail}">${userEmail}</a>) has sent a new follow-up message regarding their account appeal:</p>
               <div style="background: #f8fafc; border-left: 4px solid #4f46e5; padding: 16px; border-radius: 6px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; margin-bottom: 20px;">
 ${reply.message}
               </div>
               <p style="font-size: 12px; color: #64748b;">You can reply to the user directly from the Admin Portal or review the full conversation history.</p>
             </div>
           `,
-          text: `New User Reply on Appeal #${appealId} from ${senderName} (${userEmail}):\n\n${reply.message}`,
+          text: `New User Reply on Support Case #${appealId} from ${senderName} (${userEmail}):\n\n${reply.message}`,
         }).catch((e) => console.warn("[Admin Reply Alert Notice]:", e.message));
       }
 
@@ -1422,16 +1473,19 @@ ${reply.message}
 
         // Notify user of reactivation
         if (targetUserEmail && targetUserEmail.includes("@")) {
+          const supportEmail = await getSupportEmail();
           const emailData = generateAccountStatusEmail({
             userName: updatedAppeal?.userName || targetUserEmail.split("@")[0],
             userEmail: targetUserEmail,
             status: "active",
             reason: adminNotes || "Appeal reviewed and approved by system administrator.",
             adminContactEmail: adminEmail || "",
+            supportEmail: supportEmail || adminEmail || "",
           });
 
           sendSystemEmail({
             to: targetUserEmail,
+            replyTo: supportEmail || adminEmail || undefined,
             subject: emailData.subject,
             html: emailData.html,
             text: emailData.text,
@@ -1461,9 +1515,13 @@ ${reply.message}
         return;
       }
 
-      const adminCreds = await getAdminCredentials();
+      const [adminCreds, supportEmail] = await Promise.all([
+        getAdminCredentials(),
+        getSupportEmail(),
+      ]);
       const senderAdminEmail = adminEmail || adminCreds.adminEmail || "";
       const senderAdminName = adminName || "System Administration";
+      const effectiveSupportEmail = supportEmail || senderAdminEmail;
 
       // Look up existing appeal or initialize record
       let appealIndex = serverAppeals.findIndex((a) => a.id === appealId);
@@ -1513,11 +1571,13 @@ ${reply.message}
           adminReply: replyMessage.trim(),
           adminName: senderAdminName,
           adminEmail: senderAdminEmail,
+          supportEmail: effectiveSupportEmail,
         });
 
         try {
           const dispatch = await sendSystemEmail({
             to: targetUserEmail,
+            replyTo: effectiveSupportEmail || undefined,
             subject: emailData.subject,
             html: emailData.html,
             text: emailData.text,

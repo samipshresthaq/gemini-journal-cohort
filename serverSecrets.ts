@@ -94,3 +94,19 @@ export async function getAdminCredentials(): Promise<{
     isConfigured: Boolean(adminPassword || jsonSecret),
   };
 }
+
+/**
+ * Retrieve the designated support email address from Secret Manager or SUPPORT_EMAIL env variable.
+ * Falls back to admin email if a dedicated support email is not configured.
+ */
+export async function getSupportEmail(): Promise<string> {
+  const secretSupport = await accessSecret("SUPPORT_EMAIL", "SUPPORT_EMAIL");
+  const envSupport = (secretSupport || process.env.SUPPORT_EMAIL || "").toLowerCase().trim();
+  if (envSupport) {
+    return envSupport;
+  }
+
+  // Fallback to admin email if configured
+  const adminCreds = await getAdminCredentials();
+  return adminCreds.adminEmail || "";
+}
